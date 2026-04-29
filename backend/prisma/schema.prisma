@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  role      String   @default("ADMIN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Meeting {
+  id            Int      @id @default(autoincrement())
+  title         String
+  summary       String?
+  location      String?
+  startDate     DateTime
+  endDate       DateTime
+  heroImage     String?
+  agendaFileUrl String?
+  reportFileUrl String?
+  photosLink    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Announcement {
+  id          Int      @id @default(autoincrement())
+  title       String
+  content     String
+  imageUrl    String?
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Person {
+  id          Int      @id @default(autoincrement())
+  fullName    String
+  role        String?
+  institution String?
+  email       String?
+  cvLink      String?
+  location    String?
+  avatar      String?
+  bio         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Project {
+  id          Int      @id @default(autoincrement())
+  title       String
+  summary     String?
+  role        String?
+  period      String?
+  location    String?
+  imageUrl    String?
+  documentUrl String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model HomeContent {
+  id                Int      @id @default(autoincrement())
+  slug              String   @unique
+
+  siteName          String?
+  headerLogo        String?
+  welcomeTitle      String?
+  welcomeText       String?
+  marqueeText       String?
+
+heroImage         String?
+heroTitle         String?
+heroDescription   String?
+heroButtonText    String?
+heroButtonLink    String?
+heroSlides        Json?
+
+  infoItems         Json?
+  attentionItems Json?
+  partnerLogos      Json?
+
+projectsSectionTitle String?
+projectsItems        Json?
+
+
+mapsSectionTitle String?
+mapsItems        Json?
+
+  footerMailingText String?
+  footerContactText String?
+  footerSocialText  String?
+  footerLogo String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model AboutContent {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique
+  title       String?
+  subtitle    String?
+  description String?
+  mission     String?
+  vision      String?
+  content     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SiteSetting {
+  id          Int      @id @default(1)
+  siteName    String   @default("International Mekong Research Working Group (IMRWG)")
+  mainLogo    String?
+  subLogo1    String?
+  subLogo2    String?
+  subLogo3    String?
+  subLogo4    String?
+  centerImage String?
+
+  footerTitle       String?
+  footerDescription String?
+  footerAddress     String?
+  footerEmail       String?
+  footerPhone       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+model FooterLink {
+  id    Int    @id @default(autoincrement())
+  label String
+  url   String
+  order Int    @default(0)
+}
+model HomeInfoItem {
+  id       Int    @id @default(autoincrement())
+  date     String
+  location String
+  order    Int    @default(0)
+}
+
+model Attention {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
