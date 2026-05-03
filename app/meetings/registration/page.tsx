@@ -4,29 +4,78 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import { getHomeContent } from "@/lib/api";
 
-type Meeting = {
-  _id: string;
-  title: string;
-  location: string;
-  date: string;
-  time?: string;
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL || "https://backend-roym.onrender.com"
+).replace(/\/$/, "");
+
+type HomeContent = {
+  siteName?: string;
+  headerLogo?: string;
+  partnerLogos?: string[] | null;
+  footerMailingText?: string;
+  footerContactText?: string;
+  footerSocialText?: string;
+  footerLogo?: string;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://backend-roym.onrender.com";
+type Meeting = {
+  id?: string | number;
+  _id?: string | number;
+  title: string;
+  location?: string;
+  date?: string;
+  startDate?: string;
+  endDate?: string;
+  time?: string;
+  type?: string;
+  status?: string;
+};
+
+function getMeetingId(meeting: Meeting) {
+  return String(meeting.id || meeting._id || "");
+}
+
+function getMeetingDate(meeting: Meeting) {
+  return meeting.startDate || meeting.date || meeting.endDate || "";
+}
 
 function normalizeMeetingList(data: any): Meeting[] {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.data)) return data.data;
   if (Array.isArray(data?.meetings)) return data.meetings;
   if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.result)) return data.result;
   return [];
+}
+
+function normalizeHome(data: any): HomeContent | null {
+  if (data?.data) return data.data;
+  if (data) return data;
+  return null;
+}
+
+function isUpcomingMeeting(meeting: Meeting) {
+  const dateValue = getMeetingDate(meeting);
+
+  if (!dateValue) return true;
+
+  const meetingTime = new Date(dateValue).getTime();
+
+  if (Number.isNaN(meetingTime)) return true;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return meetingTime >= today.getTime();
 }
 
 function RegistrationForm() {
   const searchParams = useSearchParams();
   const meetingIdFromUrl = searchParams.get("meetingId") || "";
 
+  const [home, setHome] = useState<HomeContent | null>(null);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loadingMeetings, setLoadingMeetings] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -43,36 +92,59 @@ function RegistrationForm() {
   });
 
   useEffect(() => {
-    fetch(`${API_URL}/api/meetings?type=upcoming`)
-      .then((res) => res.json())
-      .then((data) => {
-        const list = normalizeMeetingList(data);
-        setMeetings(list);
+    const fetchPageData = async () => {
+      try {
+        setLoadingMeetings(true);
+
+        const [homeRes, meetingsRes] = await Promise.all([
+          getHomeContent(),
+          fetch(`${API_URL}/api/meetings`, {
+            cache: "no-store",
+          }).then((res) => res.json()),
+        ]);
+
+        const homeData = normalizeHome(homeRes);
+        const meetingList = normalizeMeetingList(meetingsRes)
+          .filter(isUpcomingMeeting)
+          .sort((a, b) => {
+            const dateA = new Date(getMeetingDate(a) || "1970-01-01").getTime();
+            const dateB = new Date(getMeetingDate(b) || "1970-01-01").getTime();
+            return dateA - dateB;
+          });
+
+        setHome(homeData);
+        setMeetings(meetingList);
 
         if (meetingIdFromUrl) {
           setForm((prev) => ({
             ...prev,
             meetingId: meetingIdFromUrl,
           }));
-        } else if (list.length > 0) {
+        } else if (meetingList.length > 0) {
           setForm((prev) => ({
             ...prev,
-            meetingId: list[0]._id,
+            meetingId: getMeetingId(meetingList[0]),
           }));
         }
-      })
-      .catch((error) => {
-        console.error("Failed to fetch meetings:", error);
+
+        console.log("REGISTRATION HOME DATA:", homeRes);
+        console.log("REGISTRATION MEETINGS DATA:", meetingsRes);
+      } catch (error) {
+        console.error("Failed to fetch registration page data:", error);
+        setHome(null);
         setMeetings([]);
-      })
-      .finally(() => {
+      } finally {
         setLoadingMeetings(false);
-      });
+      }
+    };
+
+    fetchPageData();
   }, [meetingIdFromUrl]);
 
   const selectedMeeting = useMemo(() => {
     if (!Array.isArray(meetings)) return undefined;
-    return meetings.find((item) => item._id === form.meetingId);
+
+    return meetings.find((item) => getMeetingId(item) === form.meetingId);
   }, [meetings, form.meetingId]);
 
   const handleChange = (
@@ -81,10 +153,11 @@ function RegistrationForm() {
     >
   ) => {
     setSuccess(false);
-    setForm({
-      ...form,
+
+    setForm((prev) => ({
+      ...prev,
       [e.target.name]: e.target.value,
-    });
+    }));
   };
 
   const resetForm = () => {
@@ -94,7 +167,7 @@ function RegistrationForm() {
       phone: "",
       organization: "",
       position: "",
-      meetingId: meetingIdFromUrl || meetings[0]?._id || "",
+      meetingId: meetingIdFromUrl || getMeetingId(meetings[0] || {}),
       note: "",
     });
   };
@@ -111,7 +184,9 @@ function RegistrationForm() {
     setSuccess(false);
 
     try {
-      const meeting = meetings.find((item) => item._id === form.meetingId);
+      const meeting = meetings.find(
+        (item) => getMeetingId(item) === form.meetingId
+      );
 
       const res = await fetch(`${API_URL}/api/registrations`, {
         method: "POST",
@@ -146,10 +221,13 @@ function RegistrationForm() {
 
   return (
     <>
-      <Header />
+      <Header
+        siteName={home?.siteName}
+        headerLogo={home?.headerLogo}
+        partnerLogos={home?.partnerLogos}
+      />
 
       <main className="bg-white text-slate-900">
-        {/* Top white section */}
         <section className="border-b border-slate-200 bg-white">
           <div className="mx-auto max-w-7xl px-6 py-16 lg:py-20">
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-emerald-600">
@@ -169,16 +247,15 @@ function RegistrationForm() {
           </div>
         </section>
 
-        {/* Lower section - clean with green/blue accent cards */}
         <section className="bg-slate-50">
           <div className="mx-auto max-w-7xl px-6 py-14">
             <div className="grid gap-8 lg:grid-cols-3">
-              {/* Form */}
               <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm lg:col-span-2">
                 <div className="mb-6">
                   <h2 className="text-2xl font-bold text-slate-900">
                     Registration Form
                   </h2>
+
                   <p className="mt-2 text-slate-500">
                     Please fill in your information accurately so the organizing
                     committee can contact you.
@@ -199,6 +276,7 @@ function RegistrationForm() {
                     <label className="mb-2 block text-sm font-semibold text-slate-700">
                       Full name
                     </label>
+
                     <input
                       name="fullName"
                       value={form.fullName}
@@ -213,6 +291,7 @@ function RegistrationForm() {
                     <label className="mb-2 block text-sm font-semibold text-slate-700">
                       Email
                     </label>
+
                     <input
                       name="email"
                       type="email"
@@ -228,6 +307,7 @@ function RegistrationForm() {
                     <label className="mb-2 block text-sm font-semibold text-slate-700">
                       Phone
                     </label>
+
                     <input
                       name="phone"
                       value={form.phone}
@@ -242,6 +322,7 @@ function RegistrationForm() {
                     <label className="mb-2 block text-sm font-semibold text-slate-700">
                       Organization / University
                     </label>
+
                     <input
                       name="organization"
                       value={form.organization}
@@ -256,6 +337,7 @@ function RegistrationForm() {
                     <label className="mb-2 block text-sm font-semibold text-slate-700">
                       Position / Role
                     </label>
+
                     <input
                       name="position"
                       value={form.position}
@@ -269,6 +351,7 @@ function RegistrationForm() {
                     <label className="mb-2 block text-sm font-semibold text-slate-700">
                       Select meeting
                     </label>
+
                     <select
                       name="meetingId"
                       value={form.meetingId}
@@ -283,7 +366,10 @@ function RegistrationForm() {
                         <option value="">No upcoming meeting</option>
                       ) : (
                         meetings.map((meeting) => (
-                          <option key={meeting._id} value={meeting._id}>
+                          <option
+                            key={getMeetingId(meeting)}
+                            value={getMeetingId(meeting)}
+                          >
                             {meeting.title}
                           </option>
                         ))
@@ -295,6 +381,7 @@ function RegistrationForm() {
                     <label className="mb-2 block text-sm font-semibold text-slate-700">
                       Note
                     </label>
+
                     <textarea
                       name="note"
                       value={form.note}
@@ -319,7 +406,6 @@ function RegistrationForm() {
                 </form>
               </div>
 
-              {/* Info side */}
               <div className="space-y-6">
                 <aside className="rounded-3xl bg-gradient-to-br from-emerald-600 to-blue-700 p-8 text-white shadow-sm">
                   <h3 className="text-2xl font-bold">Meeting Information</h3>
@@ -330,6 +416,7 @@ function RegistrationForm() {
                         <p className="text-sm font-medium text-white/70">
                           Selected Meeting
                         </p>
+
                         <p className="mt-1 text-lg font-semibold">
                           {selectedMeeting.title}
                         </p>
@@ -339,10 +426,11 @@ function RegistrationForm() {
                         <p className="text-sm font-medium text-white/70">
                           Date
                         </p>
+
                         <p className="mt-1">
-                          {selectedMeeting.date
+                          {getMeetingDate(selectedMeeting)
                             ? new Date(
-                                selectedMeeting.date
+                                getMeetingDate(selectedMeeting)
                               ).toLocaleDateString("en-US")
                             : "Updating"}
                         </p>
@@ -353,6 +441,7 @@ function RegistrationForm() {
                           <p className="text-sm font-medium text-white/70">
                             Time
                           </p>
+
                           <p className="mt-1">{selectedMeeting.time}</p>
                         </div>
                       )}
@@ -361,7 +450,10 @@ function RegistrationForm() {
                         <p className="text-sm font-medium text-white/70">
                           Location
                         </p>
-                        <p className="mt-1">{selectedMeeting.location}</p>
+
+                        <p className="mt-1">
+                          {selectedMeeting.location || "Updating"}
+                        </p>
                       </div>
                     </div>
                   ) : (
@@ -380,7 +472,9 @@ function RegistrationForm() {
                     <li>• Please use a valid email address.</li>
                     <li>• Your registration will be reviewed by the admin.</li>
                     <li>• You can only register for upcoming meetings.</li>
-                    <li>• The selected meeting will appear on the right panel.</li>
+                    <li>
+                      • The selected meeting will appear on the right panel.
+                    </li>
                   </ul>
                 </div>
               </div>
@@ -389,7 +483,12 @@ function RegistrationForm() {
         </section>
       </main>
 
-      <Footer />
+      <Footer
+        footerLogo={home?.footerLogo}
+        footerMailingText={home?.footerMailingText}
+        footerContactText={home?.footerContactText}
+        footerSocialText={home?.footerSocialText}
+      />
     </>
   );
 }

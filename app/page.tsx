@@ -5,13 +5,11 @@ import Container from "@/components/layout/Container";
 import Link from "next/link";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { getPeople, getProjects } from "@/lib/api";
+import { getHomeContent, getPeople, getProjects } from "@/lib/api";
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL || "https://backend-roym.onrender.com"
-)
-  .replace(/\/api\/?$/, "")
-  .replace(/\/$/, "");
+).replace(/\/$/, "");
 
 type InfoItem = {
   date: string;
@@ -175,11 +173,7 @@ export default function Home() {
     const fetchData = async () => {
       try {
         const [homeRes, peopleRes, projectsRes] = await Promise.all([
-          fetch(`${API_URL}/api/home`, {
-            cache: "no-store",
-          })
-            .then((res) => (res.ok ? res.json() : null))
-            .catch(() => null),
+          getHomeContent(),
           getPeople(),
           getProjects(),
         ]);

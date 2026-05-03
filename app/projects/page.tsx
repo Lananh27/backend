@@ -41,9 +41,20 @@ type HomeContent = {
 
 const statusOptions: ProjectStatus[] = ["In Progress", "Completed", "Planned"];
 
-function imageUrl(url?: string) {
-  if (!url) return "";
-  return url.startsWith("http") ? url : `${API_URL}${url}`;
+function normalizeHome(data: any): HomeContent | null {
+  if (data?.data) return data.data;
+  if (data) return data;
+  return null;
+}
+
+function imageUrl(url?: string | null) {
+  if (!url || !url.trim()) return "";
+
+  if (url.startsWith("http")) return url;
+
+  if (url.startsWith("/images")) return url;
+
+  return `${API_URL}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
 function statusClass(status?: string) {
@@ -63,6 +74,10 @@ function slugify(text: string) {
 }
 
 function getProjectHref(project: ProjectItem) {
+  if (project.readMoreLink && project.readMoreLink.trim()) {
+    return project.readMoreLink;
+  }
+
   const slug = project.slug?.trim() || slugify(project.title || "");
 
   if (!slug) return "/projects";
@@ -75,8 +90,14 @@ function normalizeProjects(data: any): ProjectItem[] {
     ? data
     : Array.isArray(data?.data)
     ? data.data
+    : Array.isArray(data?.projects)
+    ? data.projects
     : Array.isArray(data?.projectsItems)
     ? data.projectsItems
+    : Array.isArray(data?.items)
+    ? data.items
+    : Array.isArray(data?.result)
+    ? data.result
     : [];
 
   return list.map((item: any) => {
@@ -88,11 +109,11 @@ function normalizeProjects(data: any): ProjectItem[] {
       slug,
       title,
       subtitle: item.subtitle || "",
-      description: item.description || "",
+      description: item.description || item.summary || "",
       bullets: Array.isArray(item.bullets) ? item.bullets : [],
-      image: item.image || "",
-      readMoreLink: `/projects/${slug}`,
-      publishedAt: item.publishedAt || "",
+      image: item.image || item.heroImage || item.imageUrl || "",
+      readMoreLink: item.readMoreLink || `/projects/${slug}`,
+      publishedAt: item.publishedAt || item.createdAt || "",
       category: item.category || item.subtitle || "Research",
       researchArea: item.researchArea || item.category || "General",
       status: item.status || "In Progress",
@@ -100,8 +121,10 @@ function normalizeProjects(data: any): ProjectItem[] {
         item.yearRange ||
         (item.publishedAt
           ? String(item.publishedAt).slice(0, 4)
+          : item.createdAt
+          ? String(item.createdAt).slice(0, 4)
           : "2024 - 2026"),
-      membersCount: item.membersCount || "5",
+      membersCount: String(item.membersCount || "5"),
     };
   });
 }
@@ -135,13 +158,17 @@ export default function ProjectsPage() {
         getProjects(),
       ]);
 
-      const homeData = homeRes?.data || homeRes || {};
-      const projectList = projectsRes?.data || [];
+      const homeData = normalizeHome(homeRes);
+      const projectList = normalizeProjects(projectsRes);
 
       setHome(homeData);
-      setProjects(normalizeProjects(projectList));
+      setProjects(projectList);
+
+      console.log("PROJECTS HOME DATA:", homeRes);
+      console.log("PROJECTS DATA:", projectsRes);
     } catch (error) {
       console.error("FETCH PROJECTS ERROR:", error);
+      setHome(null);
       setProjects([]);
     } finally {
       setLoading(false);
@@ -223,8 +250,8 @@ export default function ProjectsPage() {
     });
 
     return result.sort((a, b) => {
-      const timeA = new Date(a.publishedAt || "").getTime();
-      const timeB = new Date(b.publishedAt || "").getTime();
+      const timeA = new Date(a.publishedAt || "1970-01-01").getTime();
+      const timeB = new Date(b.publishedAt || "1970-01-01").getTime();
 
       if (sortOrder === "Oldest First") return timeA - timeB;
       return timeB - timeA;
@@ -732,7 +759,7 @@ function ProjectCard({
         listMode ? "md:grid md:grid-cols-[300px_minmax(0,1fr)]" : ""
       }`}
     >
-      <div className="relative h-[150px] bg-[#e9eef7]">
+      <div className="relative h-[150px] overflow-hidden bg-[#e9eef7]">
         {project.image ? (
           <img
             src={imageUrl(project.image)}
@@ -771,6 +798,7 @@ function ProjectCard({
           <span>
             📅 {project.yearRange || project.publishedAt || "No year"}
           </span>
+
           <span>👥 {project.membersCount || "0"} members</span>
 
           <span

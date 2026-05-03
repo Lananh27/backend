@@ -25,11 +25,53 @@ type HomeContent = {
 
 type ProjectDetailItem = ProjectItem & {
   content?: string;
+  heroImage?: string;
+  imageUrl?: string;
+  summary?: string;
+  createdAt?: string;
 };
 
-function imageUrl(url?: string) {
-  if (!url) return "";
-  return url.startsWith("http") ? url : `${API_URL}${url}`;
+function normalizeHome(data: any): HomeContent | null {
+  if (data?.data) return data.data;
+  if (data?.home) return data.home;
+  if (data) return data;
+  return null;
+}
+
+function normalizeProject(data: any): ProjectDetailItem | null {
+  const item = data?.data || data?.project || data?.item || data?.result || data;
+
+  if (!item || typeof item !== "object") return null;
+
+  return {
+    ...item,
+    title: item.title || "Untitled project",
+    description: item.description || item.summary || "",
+    image: item.image || item.heroImage || item.imageUrl || "",
+    publishedAt: item.publishedAt || item.createdAt || "",
+    status: item.status || "In Progress",
+    category: item.category || "Research",
+    researchArea: item.researchArea || item.category || "General",
+    yearRange:
+      item.yearRange ||
+      (item.publishedAt
+        ? String(item.publishedAt).slice(0, 4)
+        : item.createdAt
+        ? String(item.createdAt).slice(0, 4)
+        : "Updating"),
+    membersCount: String(item.membersCount || "0"),
+    bullets: Array.isArray(item.bullets) ? item.bullets : [],
+  };
+}
+
+function imageUrl(url?: string | null) {
+  if (!url || !url.trim()) return "";
+
+  if (url.startsWith("http")) return url;
+
+  if (url.startsWith("/images")) return url;
+
+  return `${API_URL}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
 function formatDate(date?: string) {
@@ -60,13 +102,17 @@ export default function ProjectDetailPage() {
           getProjectBySlug(slug),
         ]);
 
-        const homeData = homeRes?.data || homeRes || null;
-        const projectData = projectRes?.data || projectRes || null;
+        const homeData = normalizeHome(homeRes);
+        const projectData = normalizeProject(projectRes);
 
         setHome(homeData);
         setProject(projectData);
+
+        console.log("PROJECT DETAIL HOME DATA:", homeRes);
+        console.log("PROJECT DETAIL DATA:", projectRes);
       } catch (error) {
         console.error("FETCH PROJECT DETAIL ERROR:", error);
+        setHome(null);
         setProject(null);
       } finally {
         setLoading(false);
@@ -216,6 +262,7 @@ export default function ProjectDetailPage() {
                             <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#7ab648] text-xs font-black text-white">
                               {index + 1}
                             </span>
+
                             <span>{item}</span>
                           </li>
                         ))}
@@ -235,18 +282,22 @@ export default function ProjectDetailPage() {
                         label="Status"
                         value={project.status || "In Progress"}
                       />
+
                       <InfoItem
                         label="Year"
                         value={project.yearRange || "Updating"}
                       />
+
                       <InfoItem
                         label="Members"
                         value={`${project.membersCount || "0"} members`}
                       />
+
                       <InfoItem
                         label="Published"
                         value={formatDate(project.publishedAt) || "Updating"}
                       />
+
                       <InfoItem
                         label="Research Area"
                         value={project.researchArea || "General"}
@@ -303,6 +354,7 @@ function InfoItem({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-black uppercase tracking-[0.16em] text-white/50">
         {label}
       </p>
+
       <p className="mt-1 text-[16px] font-bold leading-7 text-white">
         {value}
       </p>
