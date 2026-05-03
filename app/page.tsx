@@ -7,7 +7,11 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { getPeople, getProjects } from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL || "https://backend-roym.onrender.com"
+)
+  .replace(/\/api\/?$/, "")
+  .replace(/\/$/, "");
 
 type InfoItem = {
   date: string;
@@ -102,7 +106,12 @@ export default function Home() {
 
   const imgUrl = (url?: string | null) => {
     if (!url || !url.trim()) return "";
-    return url.startsWith("http") ? url : `${API_URL}${url}`;
+
+    if (url.startsWith("http")) return url;
+
+    if (url.startsWith("/images")) return url;
+
+    return `${API_URL}${url.startsWith("/") ? url : `/${url}`}`;
   };
 
   const getMapEmbedSrc = (link?: string | null, fallbackQuery?: string) => {
@@ -110,24 +119,20 @@ export default function Home() {
 
     if (!raw && !fallbackQuery?.trim()) return "";
 
-    // Nếu admin dán nguyên thẻ iframe thì lấy src ra
     const srcMatch = raw.match(/src=["']([^"']+)["']/i);
     if (srcMatch?.[1]) {
       return srcMatch[1];
     }
 
-    // Nếu đã là link embed chuẩn thì dùng luôn
     if (raw.includes("google.com/maps/embed")) {
       return raw;
     }
 
-    // Nếu link có tọa độ dạng @10.123,106.123
     const coordMatch = raw.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
     if (coordMatch?.[1] && coordMatch?.[2]) {
       return `https://maps.google.com/maps?q=${coordMatch[1]},${coordMatch[2]}&z=15&output=embed`;
     }
 
-    // Nếu link có dạng /place/Ten-dia-diem
     const placeMatch = raw.match(/\/place\/([^/@?]+)/);
     if (placeMatch?.[1]) {
       const placeName = decodeURIComponent(placeMatch[1]).replace(/\+/g, " ");
@@ -136,7 +141,6 @@ export default function Home() {
       )}&z=15&output=embed`;
     }
 
-    // Nếu là link maps thường có query q
     try {
       if (raw.startsWith("http")) {
         const url = new URL(raw);
@@ -152,7 +156,6 @@ export default function Home() {
       // bỏ qua nếu URL không hợp lệ
     }
 
-    // Nếu admin dán link thường hoặc text địa điểm thì ép thành query embed
     const query = raw || fallbackQuery || "";
     return `https://maps.google.com/maps?q=${encodeURIComponent(
       query
@@ -172,7 +175,9 @@ export default function Home() {
     const fetchData = async () => {
       try {
         const [homeRes, peopleRes, projectsRes] = await Promise.all([
-          fetch(`${API_URL}/api/home`)
+          fetch(`${API_URL}/api/home`, {
+            cache: "no-store",
+          })
             .then((res) => (res.ok ? res.json() : null))
             .catch(() => null),
           getPeople(),
@@ -189,12 +194,16 @@ export default function Home() {
 
         if (Array.isArray(peopleRes?.data)) {
           setPeople(peopleRes.data);
+        } else if (Array.isArray(peopleRes)) {
+          setPeople(peopleRes);
         } else {
           setPeople([]);
         }
 
         if (Array.isArray(projectsRes?.data)) {
           setProjects(projectsRes.data);
+        } else if (Array.isArray(projectsRes)) {
+          setProjects(projectsRes);
         } else {
           setProjects([]);
         }
@@ -330,8 +339,8 @@ export default function Home() {
           <Container>
             <div className="text-center">
               <h1 className="text-[56px] font-bold text-[#0b3f75]">
-  {home?.welcomeTitle || "Welcome to IMRWG"}
-</h1>
+                {home?.welcomeTitle || "Welcome to IMRWG"}
+              </h1>
 
               <p className="mx-auto mt-4 max-w-[1500px] text-[24px] leading-10">
                 {home?.welcomeText || (
@@ -474,8 +483,8 @@ export default function Home() {
 
                     <div className="absolute bottom-8 left-10 right-10 text-white">
                       <div className="mb-4 inline-block rounded-full bg-blue-600 px-5 py-2 font-semibold text-white">
-  Latest
-</div>
+                        Latest
+                      </div>
 
                       <h3 className="max-w-[650px] text-[32px] font-bold leading-tight xl:text-[40px]">
                         {currentHeroSlide.title}
@@ -496,14 +505,16 @@ export default function Home() {
                     {heroSlides.length > 1 && (
                       <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-3">
                         {heroSlides.map((_, index) => (
-  <button
-    key={index}
-    onClick={() => setCurrentSlide(index)}
-    className={`h-4 w-4 rounded-full ${
-      currentSlide === index ? "bg-[#0b5cad]" : "bg-white/70"
-    }`}
-  />
-))}
+                          <button
+                            key={index}
+                            onClick={() => setCurrentSlide(index)}
+                            className={`h-4 w-4 rounded-full ${
+                              currentSlide === index
+                                ? "bg-[#0b5cad]"
+                                : "bg-white/70"
+                            }`}
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
@@ -515,34 +526,36 @@ export default function Home() {
               </div>
 
               <div className="h-fit border border-[#8cc6ff] bg-[#FFFFFF] p-5">
-  <div className="flex items-center justify-between">
-    <h2 className="text-[28px] font-bold text-black">Attention</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[28px] font-bold text-black">
+                    Attention
+                  </h2>
 
-    <Link
-      href="/documents/"
-      className="text-[18px] font-semibold text-[#0b5cad] underline underline-offset-4 hover:text-[#063f7d]"
-    >
-      View All
-    </Link>
-  </div>
+                  <Link
+                    href="/documents/"
+                    className="text-[18px] font-semibold text-[#0b5cad] underline underline-offset-4 hover:text-[#063f7d]"
+                  >
+                    View All
+                  </Link>
+                </div>
 
-  <div className="mt-5 space-y-5 border-t border-[#b9dfff] pt-5">
-    {attentionItems.slice(0, 3).map((item, index) => (
-      <div key={index} className="flex gap-3 text-[#0b5cad]">
-        <span className="mt-2 h-3 w-3 shrink-0 bg-[#0b5cad]" />
+                <div className="mt-5 space-y-5 border-t border-[#b9dfff] pt-5">
+                  {attentionItems.slice(0, 3).map((item, index) => (
+                    <div key={index} className="flex gap-3 text-[#0b5cad]">
+                      <span className="mt-2 h-3 w-3 shrink-0 bg-[#0b5cad]" />
 
-        <div className="text-[17px] leading-8">
-          <Link
-            href={`/documents/attention/${item.postSlug}`}
-            className="text-[#0b5cad] hover:text-[#063f7d] hover:underline"
-          >
-            {item.title}
-          </Link>
-        </div>
-      </div>
-    ))}
-  </div>
-</div>
+                      <div className="text-[17px] leading-8">
+                        <Link
+                          href={`/documents/attention/${item.postSlug}`}
+                          className="text-[#0b5cad] hover:text-[#063f7d] hover:underline"
+                        >
+                          {item.title}
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <section className="mt-6 bg-white py-12">
@@ -588,16 +601,16 @@ export default function Home() {
                         </p>
 
                         <Link
-  href={
-    newestProject.readMoreLink ||
-    (newestProject.slug
-      ? `/projects/${newestProject.slug}`
-      : "/projects")
-  }
-  className="mt-6 inline-block text-[18px] font-semibold text-[#0b5cad] underline underline-offset-4 hover:text-[#063f7d]"
->
-  Read more →
-</Link>
+                          href={
+                            newestProject.readMoreLink ||
+                            (newestProject.slug
+                              ? `/projects/${newestProject.slug}`
+                              : "/projects")
+                          }
+                          className="mt-6 inline-block text-[18px] font-semibold text-[#0b5cad] underline underline-offset-4 hover:text-[#063f7d]"
+                        >
+                          Read more →
+                        </Link>
                       </div>
                     </div>
                   ) : (
@@ -612,261 +625,264 @@ export default function Home() {
         </section>
 
         <section className="bg-gradient-to-br from-[#071326] via-[#102446] to-[#1d4f91] py-14">
-  <Container>
-    <div className="grid items-stretch gap-8 lg:grid-cols-3">
-      {homeMaps.length > 0 ? (
-        homeMaps.slice(0, 3).map((item, index) => {
-          const mapSrc = getMapEmbedSrc(
-            item.link,
-            `${item.title} ${item.content}`
-          );
+          <Container>
+            <div className="grid items-stretch gap-8 lg:grid-cols-3">
+              {homeMaps.length > 0 ? (
+                homeMaps.slice(0, 3).map((item, index) => {
+                  const mapSrc = getMapEmbedSrc(
+                    item.link,
+                    `${item.title} ${item.content}`
+                  );
 
-          return (
-            <div
-              key={index}
-              className="flex h-[390px] flex-col overflow-hidden rounded-[24px] border border-white/15 bg-white shadow-[0_18px_45px_rgba(0,0,0,0.28)] transition-all hover:-translate-y-1 hover:shadow-[0_24px_55px_rgba(0,0,0,0.35)]"
-            >
-              <div className="p-6 pb-3">
-                <h3 className="min-h-[58px] line-clamp-2 text-[24px] font-black leading-tight text-[#0f2342]">
-                  {item.title}
-                </h3>
-              </div>
+                  return (
+                    <div
+                      key={index}
+                      className="flex h-[390px] flex-col overflow-hidden rounded-[24px] border border-white/15 bg-white shadow-[0_18px_45px_rgba(0,0,0,0.28)] transition-all hover:-translate-y-1 hover:shadow-[0_24px_55px_rgba(0,0,0,0.35)]"
+                    >
+                      <div className="p-6 pb-3">
+                        <h3 className="min-h-[58px] line-clamp-2 text-[24px] font-black leading-tight text-[#0f2342]">
+                          {item.title}
+                        </h3>
+                      </div>
 
-              <div className="mx-6 mb-5 mt-2 h-[170px] overflow-hidden rounded-[18px] border border-[#c7d7e8] bg-[#e8f3ff]">
-                {mapSrc ? (
-                  <iframe
-                    src={mapSrc}
-                    title={item.title || `Map ${index + 1}`}
-                    className="h-full w-full border-0"
-                    loading="lazy"
-                    allowFullScreen
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
+                      <div className="mx-6 mb-5 mt-2 h-[170px] overflow-hidden rounded-[18px] border border-[#c7d7e8] bg-[#e8f3ff]">
+                        {mapSrc ? (
+                          <iframe
+                            src={mapSrc}
+                            title={item.title || `Map ${index + 1}`}
+                            className="h-full w-full border-0"
+                            loading="lazy"
+                            allowFullScreen
+                            referrerPolicy="no-referrer-when-downgrade"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-gray-500">
+                            No map available.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-auto flex justify-center px-6 pb-6">
+                        <Link
+                          href={`/maps/${item.slug}`}
+                          className="inline-flex items-center justify-center rounded-[14px] bg-gradient-to-r from-[#1d7bba] to-[#2563eb] px-6 py-3 text-[16px] font-black text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+                        >
+                          {item.buttonText || "View Map"} →
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <>
+                  <div className="h-[390px] rounded-[24px] border border-white/15 bg-white/10 p-6 shadow-lg" />
+                  <div className="h-[390px] rounded-[24px] border border-white/15 bg-white/10 p-6 shadow-lg" />
+                  <div className="h-[390px] rounded-[24px] border border-white/15 bg-white/10 p-6 shadow-lg" />
+                </>
+              )}
+            </div>
+          </Container>
+        </section>
+
+        <section className="bg-[#efefef] py-12">
+          <div className="mx-auto max-w-[1500px] px-12">
+            <h2 className="mb-10 text-center text-[34px] font-bold uppercase text-[#1f3b63]">
+              FEATURED SPEAKERS
+            </h2>
+
+            <div className="relative">
+              {people.length > 0 && (
+                <button
+                  onClick={() => scrollPeople("left")}
+                  className="absolute left-[-20px] top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[26px] shadow-md hover:bg-gray-100"
+                >
+                  &#10094;
+                </button>
+              )}
+
+              <div
+                ref={peopleSliderRef}
+                className="scrollbar-hide flex gap-6 overflow-x-auto scroll-smooth pb-4"
+              >
+                {people.length > 0 ? (
+                  people.map((person) => (
+                    <div
+                      key={person.id}
+                      className="basis-1/5 min-w-[260px] flex-shrink-0"
+                    >
+                      <div className="flex h-[310px] w-full flex-col items-center rounded-2xl bg-white p-6 text-center shadow-md transition hover:shadow-lg">
+                        <div className="mx-auto h-[110px] w-[110px] shrink-0 overflow-hidden rounded-full bg-gray-200">
+                          {person.avatar ? (
+                            <img
+                              src={imgUrl(person.avatar) || ""}
+                              alt={person.fullName}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">
+                              No image
+                            </div>
+                          )}
+                        </div>
+
+                        <h3 className="mt-5 line-clamp-2 min-h-[52px] text-[18px] font-bold leading-[26px] text-black">
+                          {person.fullName}
+                        </h3>
+
+                        <div className="mt-2 min-h-[52px]">
+                          {person.role ? (
+                            <p className="line-clamp-2 text-[16px] leading-[26px] text-gray-700">
+                              {person.role}
+                            </p>
+                          ) : (
+                            <p className="text-[16px] leading-[26px] text-gray-400">
+                              Updating...
+                            </p>
+                          )}
+                        </div>
+
+                        <Link
+                          href={
+                            person.id
+                              ? `/people?personId=${person.id}`
+                              : `/people?name=${encodeURIComponent(
+                                  person.fullName
+                                )}`
+                          }
+                          className="mt-auto inline-flex items-center gap-1 border-b-2 border-[#65b741] pb-1 text-[15px] font-bold !text-[#0066cc] transition hover:gap-2 hover:border-[#4f9d2f] hover:!text-[#004f9e]"
+                        >
+                          Xem chi tiết <span className="text-[16px]">››</span>
+                        </Link>
+                      </div>
+                    </div>
+                  ))
                 ) : (
-                  <div className="flex h-full items-center justify-center text-gray-500">
-                    No map available.
+                  <div className="w-full py-8 text-center text-[18px] text-gray-500">
+                    Chưa có dữ liệu People.
                   </div>
                 )}
               </div>
 
-              <div className="mt-auto flex justify-center px-6 pb-6">
-                <Link
-                  href={`/maps/${item.slug}`}
-                  className="inline-flex items-center justify-center rounded-[14px] bg-gradient-to-r from-[#1d7bba] to-[#2563eb] px-6 py-3 text-[16px] font-black text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+              {people.length > 0 && (
+                <button
+                  onClick={() => scrollPeople("right")}
+                  className="absolute right-[-20px] top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[26px] shadow-md hover:bg-gray-100"
                 >
-                  {item.buttonText || "View Map"} →
-                </Link>
-              </div>
-            </div>
-          );
-        })
-      ) : (
-        <>
-          <div className="h-[390px] rounded-[24px] border border-white/15 bg-white/10 p-6 shadow-lg" />
-          <div className="h-[390px] rounded-[24px] border border-white/15 bg-white/10 p-6 shadow-lg" />
-          <div className="h-[390px] rounded-[24px] border border-white/15 bg-white/10 p-6 shadow-lg" />
-        </>
-      )}
-    </div>
-  </Container>
-</section>
-
-        <section className="bg-[#efefef] py-12">
-  <div className="mx-auto max-w-[1500px] px-12">
-    <h2 className="mb-10 text-center text-[34px] font-bold uppercase text-[#1f3b63]">
-      FEATURED SPEAKERS
-    </h2>
-
-    <div className="relative">
-      {people.length > 0 && (
-        <button
-          onClick={() => scrollPeople("left")}
-          className="absolute left-[-20px] top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[26px] shadow-md hover:bg-gray-100"
-        >
-          &#10094;
-        </button>
-      )}
-
-      <div
-        ref={peopleSliderRef}
-        className="scrollbar-hide flex gap-6 overflow-x-auto scroll-smooth pb-4"
-      >
-        {people.length > 0 ? (
-          people.map((person) => (
-            <div
-              key={person.id}
-              className="basis-1/5 min-w-[260px] flex-shrink-0"
-            >
-              <div className="flex h-[310px] w-full flex-col items-center rounded-2xl bg-white p-6 text-center shadow-md transition hover:shadow-lg">
-                <div className="mx-auto h-[110px] w-[110px] shrink-0 overflow-hidden rounded-full bg-gray-200">
-                  {person.avatar ? (
-                    <img
-                      src={imgUrl(person.avatar) || ""}
-                      alt={person.fullName}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">
-                      No image
-                    </div>
-                  )}
-                </div>
-
-                <h3 className="mt-5 line-clamp-2 min-h-[52px] text-[18px] font-bold leading-[26px] text-black">
-                  {person.fullName}
-                </h3>
-
-                <div className="mt-2 min-h-[52px]">
-                  {person.role ? (
-                    <p className="line-clamp-2 text-[16px] leading-[26px] text-gray-700">
-                      {person.role}
-                    </p>
-                  ) : (
-                    <p className="text-[16px] leading-[26px] text-gray-400">
-                      Updating...
-                    </p>
-                  )}
-                </div>
-
-                <Link
-  href={
-    person.id
-      ? `/people?personId=${person.id}`
-      : `/people?name=${encodeURIComponent(person.fullName)}`
-  }
-  className="mt-auto inline-flex items-center gap-1 border-b-2 border-[#65b741] pb-1 text-[15px] font-bold !text-[#0066cc] transition hover:gap-2 hover:border-[#4f9d2f] hover:!text-[#004f9e]"
->
-  Xem chi tiết <span className="text-[16px]">››</span>
-</Link>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="w-full py-8 text-center text-[18px] text-gray-500">
-            Chưa có dữ liệu People.
-          </div>
-        )}
-      </div>
-
-      {people.length > 0 && (
-        <button
-          onClick={() => scrollPeople("right")}
-          className="absolute right-[-20px] top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[26px] shadow-md hover:bg-gray-100"
-        >
-          &#10095;
-        </button>
-      )}
-    </div>
-  </div>
-</section>
-
-        <section className="mb-10 bg-[#eaf4ff] py-10">
-  <Container>
-    <div className="mb-10 text-center">
-      <h2 className="text-[32px] font-semibold text-[#0b5cad]">
-        {home?.projectsSectionTitle || "STRATEGIC PARTNERS"}
-      </h2>
-    </div>
-
-    <div className="relative flex justify-center gap-12 bg-[#eaf4ff] px-8 py-12 lg:gap-20 xl:gap-30">
-      <div
-        className="absolute inset-x-0 top-[-20px] rounded-[28px] bg-cover bg-center opacity-80"
-        style={{
-          backgroundImage: "url('/images/s1.jfif')",
-          backgroundPosition: "center",
-          backgroundSize: "cover",
-          height: "230px",
-          width: "100%",
-        }}
-      />
-
-      {(Array.isArray(home?.projectsItems) && home.projectsItems.length > 0
-        ? home.projectsItems
-        : [
-            {
-              name: "HCMUNRE",
-              title: "HCMUNRE",
-              logo: "/images/S2.png",
-              imageUrl: "/images/S2.png",
-              link: "#",
-              buttonLink: "#",
-            },
-            {
-              name: "ISP",
-              title: "ISP",
-              logo: "/images/S3.jpg",
-              imageUrl: "/images/S3.jpg",
-              link: "#",
-              buttonLink: "#",
-            },
-            {
-              name: "UTT",
-              title: "UTT",
-              logo: "/images/S4.png",
-              imageUrl: "/images/S4.png",
-              link: "#",
-              buttonLink: "#",
-            },
-            {
-              name: "VNSC",
-              title: "VNSC",
-              logo: "/images/S5.png",
-              imageUrl: "/images/S5.png",
-              link: "#",
-              buttonLink: "#",
-            },
-          ]
-      ).map((partner: any, index: number) => {
-        const partnerName =
-          partner.name || partner.title || `Partner ${index + 1}`;
-        const partnerLogo = partner.logo || partner.imageUrl || "";
-        const partnerLink = partner.link || partner.buttonLink || "#";
-
-        const card = (
-          <div className="z-10 flex h-[200px] w-[160px] flex-col items-center rounded-[999px] border-2 border-[#8cc6ff] bg-white px-6 py-5 shadow-[0_12px_30px_rgba(11,92,173,0.16)] transition-transform hover:scale-105 hover:border-[#0b5cad]">
-            <div className="flex h-[110px] w-[110px] items-center justify-center">
-              {partnerLogo ? (
-                <img
-                  src={partnerLogo}
-                  alt={partnerName}
-                  className="max-h-full max-w-full object-contain"
-                />
-              ) : (
-                <span className="text-center text-xs text-slate-400">
-                  No logo
-                </span>
+                  &#10095;
+                </button>
               )}
             </div>
-
-            <p className="mt-4 text-[16px] font-semibold text-[#0b3f75]">
-              {partnerName}
-            </p>
           </div>
-        );
+        </section>
 
-        if (!partnerLink || partnerLink === "#") {
-          return (
-            <div key={index} className="z-10">
-              {card}
+        <section className="mb-10 bg-[#eaf4ff] py-10">
+          <Container>
+            <div className="mb-10 text-center">
+              <h2 className="text-[32px] font-semibold text-[#0b5cad]">
+                {home?.projectsSectionTitle || "STRATEGIC PARTNERS"}
+              </h2>
             </div>
-          );
-        }
 
-        return (
-          <a
-            key={index}
-            href={partnerLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="z-10"
-          >
-            {card}
-          </a>
-        );
-      })}
-    </div>
-  </Container>
-</section>
+            <div className="relative flex justify-center gap-12 bg-[#eaf4ff] px-8 py-12 lg:gap-20 xl:gap-30">
+              <div
+                className="absolute inset-x-0 top-[-20px] rounded-[28px] bg-cover bg-center opacity-80"
+                style={{
+                  backgroundImage: "url('/images/s1.jfif')",
+                  backgroundPosition: "center",
+                  backgroundSize: "cover",
+                  height: "230px",
+                  width: "100%",
+                }}
+              />
+
+              {(Array.isArray(home?.projectsItems) &&
+              home.projectsItems.length > 0
+                ? home.projectsItems
+                : [
+                    {
+                      name: "HCMUNRE",
+                      title: "HCMUNRE",
+                      logo: "/images/S2.png",
+                      imageUrl: "/images/S2.png",
+                      link: "#",
+                      buttonLink: "#",
+                    },
+                    {
+                      name: "ISP",
+                      title: "ISP",
+                      logo: "/images/S3.jpg",
+                      imageUrl: "/images/S3.jpg",
+                      link: "#",
+                      buttonLink: "#",
+                    },
+                    {
+                      name: "UTT",
+                      title: "UTT",
+                      logo: "/images/S4.png",
+                      imageUrl: "/images/S4.png",
+                      link: "#",
+                      buttonLink: "#",
+                    },
+                    {
+                      name: "VNSC",
+                      title: "VNSC",
+                      logo: "/images/S5.png",
+                      imageUrl: "/images/S5.png",
+                      link: "#",
+                      buttonLink: "#",
+                    },
+                  ]
+              ).map((partner: any, index: number) => {
+                const partnerName =
+                  partner.name || partner.title || `Partner ${index + 1}`;
+                const partnerLogo = partner.logo || partner.imageUrl || "";
+                const partnerLink = partner.link || partner.buttonLink || "#";
+
+                const card = (
+                  <div className="z-10 flex h-[200px] w-[160px] flex-col items-center rounded-[999px] border-2 border-[#8cc6ff] bg-white px-6 py-5 shadow-[0_12px_30px_rgba(11,92,173,0.16)] transition-transform hover:scale-105 hover:border-[#0b5cad]">
+                    <div className="flex h-[110px] w-[110px] items-center justify-center">
+                      {partnerLogo ? (
+                        <img
+                          src={imgUrl(partnerLogo) || partnerLogo}
+                          alt={partnerName}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-center text-xs text-slate-400">
+                          No logo
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-4 text-[16px] font-semibold text-[#0b3f75]">
+                      {partnerName}
+                    </p>
+                  </div>
+                );
+
+                if (!partnerLink || partnerLink === "#") {
+                  return (
+                    <div key={index} className="z-10">
+                      {card}
+                    </div>
+                  );
+                }
+
+                return (
+                  <a
+                    key={index}
+                    href={partnerLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="z-10"
+                  >
+                    {card}
+                  </a>
+                );
+              })}
+            </div>
+          </Container>
+        </section>
 
         <Footer
           footerLogo={home?.footerLogo}

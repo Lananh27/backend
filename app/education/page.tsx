@@ -69,7 +69,7 @@ type EducationContent = {
   ctaButtonLink?: string;
 };
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || "https://backend-roym.onrender.com").replace(/\/$/, "");
 
 function imgUrl(url?: string) {
   if (!url) return "";

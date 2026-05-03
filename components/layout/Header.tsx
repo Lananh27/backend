@@ -17,7 +17,7 @@ type NavItem = {
   children?: NavItem[];
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://backend-roym.onrender.com";
 
 const navItems: NavItem[] = [
   { label: "Home", href: "/" },

@@ -55,7 +55,7 @@ function getHtmlContent(content?: string | { html?: string }) {
 function getImageUrl(url?: string) {
   if (!url) return "";
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://backend-roym.onrender.com";
   return url.startsWith("http") ? url : `${API_URL}${url}`;
 }
 
