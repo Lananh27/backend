@@ -26,15 +26,19 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Cho phép request không có origin, ví dụ Postman, mobile app, server-to-server
+      // Cho phép request không có origin: Postman, mobile app, server-to-server
       if (!origin) {
         return callback(null, true);
       }
 
-      if (allowedOrigins.includes(origin)) {
+      const isAllowed =
+        allowedOrigins.includes(origin) || origin.endsWith(".vercel.app");
+
+      if (isAllowed) {
         return callback(null, true);
       }
 
+      console.log("CORS blocked origin:", origin);
       return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
     credentials: true,
@@ -59,6 +63,26 @@ app.use("/api/projects", projectRoutes);
 
 app.get("/", (_req, res) => {
   return res.json({ message: "Backend is running" });
+});
+
+app.get("/api", (_req, res) => {
+  return res.json({
+    message: "API is running",
+    routes: [
+      "/api/auth",
+      "/api/meetings",
+      "/api/announcements",
+      "/api/upload",
+      "/api/home",
+      "/api/about",
+      "/api/people",
+      "/api/education",
+      "/api/data",
+      "/api/library",
+      "/api/registrations",
+      "/api/projects",
+    ],
+  });
 });
 
 const PORT = Number(process.env.PORT) || 5000;
