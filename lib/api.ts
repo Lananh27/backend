@@ -1,5 +1,5 @@
 export const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+  process.env.NEXT_PUBLIC_API_URL || "https://backend-roym.onrender.com"
 ).replace(/\/$/, "");
 
 export function getToken() {
