@@ -220,36 +220,37 @@ export default function Home() {
     });
   };
 
- useEffect(() => {
-  const fetchData = async () => {
-    try {
-      const [homeRes, peopleRes, projectsRes] = await Promise.all([
-        getHomeContent(),
-        getPeople(),
-        getProjects(),
-      ]);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [homeRes, peopleRes, projectsRes] = await Promise.all([
+          getHomeContent(),
+          getPeople(),
+          getProjects(),
+        ]);
 
-      setHome(homeRes || null);
+        const homeData = normalizeHomeResponse(homeRes);
+        const peopleData = normalizeArrayResponse<PersonItem>(peopleRes);
+        const projectsData = normalizeArrayResponse<ProjectItem>(projectsRes);
 
-      const peopleData = normalizeArrayResponse<PersonItem>(peopleRes);
-      const projectsData = normalizeArrayResponse<ProjectItem>(projectsRes);
+        setHome(homeData);
+        setPeople(peopleData);
+        setProjects(projectsData);
 
-      setPeople(peopleData);
-      setProjects(projectsData);
+        console.log("HOME PAGE RAW:", homeRes);
+        console.log("HOME PAGE NORMALIZED:", homeData);
+        console.log("PEOPLE PAGE NORMALIZED:", peopleData);
+        console.log("PROJECTS PAGE NORMALIZED:", projectsData);
+      } catch (error) {
+        console.error("FETCH HOME PAGE ERROR:", error);
+        setHome(null);
+        setPeople([]);
+        setProjects([]);
+      }
+    };
 
-      console.log("HOME PAGE DATA:", homeRes);
-      console.log("PEOPLE PAGE DATA:", peopleData);
-      console.log("PROJECTS PAGE DATA:", projectsData);
-    } catch (error) {
-      console.error("FETCH HOME PAGE ERROR:", error);
-      setHome(null);
-      setPeople([]);
-      setProjects([]);
-    }
-  };
-
-  fetchData();
-}, []);
+    fetchData();
+  }, []);
 
   const infoItems = Array.isArray(home?.infoItems) ? home.infoItems : [];
 

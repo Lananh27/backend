@@ -45,13 +45,11 @@ export async function getHomeContent() {
     cache: "no-store",
   });
 
-  const result = await readJsonSafely(res);
-
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to fetch home content");
+    throw new Error("Failed to fetch home content");
   }
 
-  return result?.data || null;
+  return res.json();
 }
 
 export async function updateHomeContent(data: any) {
@@ -338,9 +336,7 @@ export async function createPerson(data: PersonItem) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/people`, {
@@ -361,9 +357,7 @@ export async function updatePerson(id: number, data: PersonItem) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/people/${id}`, {
@@ -384,9 +378,7 @@ export async function deletePerson(id: number) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/people/${id}`, {
@@ -491,9 +483,7 @@ export async function createDataItem(payload: Partial<DataItem>) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/data`, {
@@ -514,9 +504,7 @@ export async function updateDataItem(id: number, payload: Partial<DataItem>) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/data/${id}`, {
@@ -537,9 +525,7 @@ export async function deleteDataItem(id: number) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/data/${id}`, {
@@ -673,9 +659,7 @@ export async function createLibraryDocument(data: LibraryDocument) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/library`, {
@@ -696,9 +680,7 @@ export async function updateLibraryDocument(id: number, data: LibraryDocument) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/library/${id}`, {
@@ -719,9 +701,7 @@ export async function deleteLibraryDocument(id: number) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/library/${id}`, {
@@ -778,9 +758,7 @@ export async function createMeeting(data: Partial<MeetingItem>) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/meetings`, {
@@ -801,9 +779,7 @@ export async function updateMeeting(id: number, data: Partial<MeetingItem>) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/meetings/${id}`, {
@@ -824,9 +800,7 @@ export async function deleteMeeting(id: number) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/meetings/${id}`, {
@@ -911,9 +885,7 @@ export async function createProject(payload: ProjectItem) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/projects`, {
@@ -934,9 +906,7 @@ export async function updateProject(id: number, payload: ProjectItem) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/projects/${id}`, {
@@ -957,9 +927,7 @@ export async function deleteProject(id: number) {
   const token = getToken();
 
   if (!token) {
-    throw new Error(
-      "Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại."
-    );
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
   }
 
   const res = await authFetch(`${API_URL}/api/projects/${id}`, {
