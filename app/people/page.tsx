@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -141,6 +141,22 @@ function getAchievements(person: PersonItem) {
 }
 
 export default function PeoplePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-[#eef6ff] px-6 py-20 text-center">
+          <p className="text-lg font-black text-[#1d4ed8]">
+            Loading people...
+          </p>
+        </main>
+      }
+    >
+      <PeoplePageContent />
+    </Suspense>
+  );
+}
+
+function PeoplePageContent() {
   const searchParams = useSearchParams();
   const personIdFromUrl = searchParams.get("personId");
   const personNameFromUrl = searchParams.get("name");
