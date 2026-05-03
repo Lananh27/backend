@@ -79,7 +79,7 @@ export default function DocumentsPage() {
             <div className="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
                 <h1 className="text-[40px] font-bold text-[#2c3e50]">
-                  Documents
+                  Articles
                 </h1>
                 <p className="mt-2 text-[16px] text-gray-600">
                   List of articles

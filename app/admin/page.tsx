@@ -49,9 +49,14 @@ const dashboardItems = [
     href: "/admin/education",
   },
   {
-    title: "Attention",
+    title: "News article",
     description: "Quản lý các mục Attention",
     href: "/admin/attention",
+  },
+  {
+    title: "Library",
+    description: "Quản lý các mục Library",
+    href: "/admin/library",
   },
 ];
 

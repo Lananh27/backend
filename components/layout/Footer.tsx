@@ -1,7 +1,12 @@
 "use client";
 
 import Container from "./Container";
-import { FaFacebookF, FaLinkedinIn, FaXTwitter } from "react-icons/fa6";
+import {
+  FaFacebookF,
+  FaLinkedinIn,
+  FaXTwitter,
+} from "react-icons/fa6";
+import { MdEmail, MdPhone } from "react-icons/md";
 
 type FooterProps = {
   footerLogo?: string;
@@ -23,75 +28,225 @@ export default function Footer({
     return url.startsWith("http") ? url : `${API_URL}${url}`;
   };
 
+  const normalizeLink = (link: string) => {
+    const clean = link.trim();
+
+    if (!clean) return "";
+
+    if (
+      clean.startsWith("http://") ||
+      clean.startsWith("https://") ||
+      clean.startsWith("mailto:") ||
+      clean.startsWith("tel:")
+    ) {
+      return clean;
+    }
+
+    return `https://${clean}`;
+  };
+
+  const contactLines = (footerContactText || "")
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const phone = contactLines[0] || "0123456789";
+  const email = contactLines[1] || "contact@example.com";
+
+  const socialLines = (footerSocialText || "")
+    .split("\n")
+    .map((item) => normalizeLink(item))
+    .filter(Boolean);
+
+  const facebookLink = socialLines[0] || "";
+  const xLink = socialLines[1] || "";
+  const linkedinLink = socialLines[2] || "";
+
+  const socialLinks = facebookLink
+  ? [
+      {
+        name: "Facebook",
+        link: facebookLink,
+        icon: <FaFacebookF className="text-[18px] text-white" />,
+      },
+    ]
+  : [];
+
   return (
     <footer
-      className="py-10 text-white"
+      className="py-6 text-white md:py-7"
       style={{
-        backgroundImage: "url('/images/background.png')",
+        backgroundImage:
+          "linear-gradient(rgba(4,32,91,0.72), rgba(4,32,91,0.72)), url('/images/background.png')",
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
     >
       <Container>
-        <div className="grid gap-10 lg:grid-cols-[1.2fr_1.2fr_1fr]">
-          <div className="lg:pl-8">
-            <div className="flex items-start gap-5">
+        <div className="grid gap-8 md:grid-cols-[1.2fr_1fr] xl:grid-cols-[1.35fr_1.15fr_0.9fr] xl:items-start">
+          <div>
+            <div className="flex items-start gap-4">
               {footerLogo ? (
                 <img
                   src={imgUrl(footerLogo)}
                   alt="Footer logo"
-                  className="max-h-[110px] w-auto shrink-0 object-contain"
+                  className="h-[82px] w-[82px] shrink-0 rounded-sm bg-white object-contain p-1"
                 />
               ) : (
-                <div className="h-[110px] w-[110px] shrink-0 border border-gray-600" />
+                <div className="h-[82px] w-[82px] shrink-0 border border-white/40" />
               )}
 
-              <div className="text-[28px] leading-9 text-white">
-                <p className="whitespace-pre-line">
-                  {footerMailingText || "LCLUC is a NASA program."}
-                </p>
+              <div className="max-w-[360px] text-[18px] font-semibold leading-[1.25] text-white md:text-[20px]">
+                {footerMailingText ? (
+                  <p className="whitespace-pre-line">{footerMailingText}</p>
+                ) : (
+                  <p>
+                    International Mekong
+                    <br />
+                    Research Working Group
+                    <br />
+                    (IMRWG)
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="mt-8 flex items-center gap-4">
-              <span className="text-[20px] font-semibold text-white">
+            <div className="mt-6 flex items-center gap-4">
+              <span className="text-[17px] font-semibold text-white">
                 Follow us:
               </span>
-              <FaFacebookF className="text-[34px] text-white transition hover:text-lime-400" />
-              <FaXTwitter className="text-[34px] text-white transition hover:text-lime-400" />
-              <FaLinkedinIn className="text-[34px] text-white transition hover:text-lime-400" />
+
+              {facebookLink ? (
+                <a
+                  href={facebookLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Facebook"
+                >
+                  <FaFacebookF className="text-[26px] text-white transition hover:text-lime-400" />
+                </a>
+              ) : (
+                <FaFacebookF className="text-[26px] text-white/50" />
+              )}
+
+              {xLink ? (
+                <a
+                  href={xLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="X"
+                >
+                  <FaXTwitter className="text-[26px] text-white transition hover:text-lime-400" />
+                </a>
+              ) : (
+                <FaXTwitter className="text-[26px] text-white/50" />
+              )}
+
+              {linkedinLink ? (
+                <a
+                  href={linkedinLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="LinkedIn"
+                >
+                  <FaLinkedinIn className="text-[26px] text-white transition hover:text-lime-400" />
+                </a>
+              ) : (
+                <FaLinkedinIn className="text-[26px] text-white/50" />
+              )}
             </div>
           </div>
 
-          <div className="flex items-start justify-center gap-12 text-[18px] font-semibold text-white">
-            <span className="whitespace-nowrap">Privacy</span>
-            <span className="whitespace-nowrap">Security</span>
-            <span className="whitespace-nowrap">Disclaimer</span>
-            <span className="whitespace-nowrap">Accessibility</span>
+          <div className="flex flex-nowrap items-start justify-center gap-x-6 text-[16px] font-semibold text-white xl:pt-2">
+            <span className="whitespace-nowrap transition hover:text-lime-300">
+              Privacy
+            </span>
+            <span className="whitespace-nowrap transition hover:text-lime-300">
+              Security
+            </span>
+            <span className="whitespace-nowrap transition hover:text-lime-300">
+              Disclaimer
+            </span>
+            <span className="whitespace-nowrap transition hover:text-lime-300">
+              Accessibility
+            </span>
           </div>
 
-          <div className="lg:pl-10">
-            <p className="text-[20px] text-lime-400">
-              {footerMailingText || "Join our Mailing List"}
-            </p>
-
-            <div className="mt-8">
-              <p className="text-[20px] font-semibold text-white">Contact us:</p>
-              <p className="mt-2 whitespace-pre-line text-[18px] text-lime-400">
-                {footerContactText || "lcluc-support@umd.edu"}
+          <div className="xl:pl-4">
+            <div>
+              <p className="text-[18px] font-semibold text-white">
+                Contact us:
               </p>
-            </div>
 
-            <div className="mt-8">
-              <div className="flex items-center gap-3 text-[20px] font-semibold text-white">
-                <span>We are on:</span>
-                <FaFacebookF className="text-[28px] text-white transition hover:text-lime-400" />
-                <FaXTwitter className="text-[28px] text-white transition hover:text-lime-400" />
-                <FaLinkedinIn className="text-[28px] text-white transition hover:text-lime-400" />
+              <div className="mt-3 space-y-2">
+                <a
+                  href={`tel:${phone}`}
+                  className="flex items-center gap-2 text-[17px] text-lime-400 transition hover:text-lime-300"
+                >
+                  <MdPhone className="text-[20px]" />
+                  <span>{phone}</span>
+                </a>
+
+                <a
+                  href={`mailto:${email}`}
+                  className="flex items-center gap-2 break-all text-[17px] text-lime-400 transition hover:text-lime-300"
+                >
+                  <MdEmail className="shrink-0 text-[20px]" />
+                  <span>{email}</span>
+                </a>
               </div>
-              <p className="mt-2 whitespace-pre-line text-[18px] text-white">
-                {footerSocialText || ""}
+            </div>
+
+            <div className="mt-5">
+              <p className="text-[18px] font-semibold text-white">
+                We are on:
               </p>
+
+              {socialLinks.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {socialLinks.map((item, index) => (
+                    <a
+                      key={`${item.link}-${index}`}
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex w-full max-w-[360px] items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 transition hover:bg-white/20"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 transition group-hover:bg-lime-400">
+                        {item.icon}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] font-bold text-white">
+                          {item.name}
+                        </p>
+                        <p className="break-all text-[12px] leading-4 text-white/70">
+                          {item.link}
+                        </p>
+                      </div>
+
+                      <div className="hidden h-[48px] w-[76px] shrink-0 overflow-hidden rounded-lg border border-white/15 bg-white/10 sm:block">
+                        <div className="flex h-3 items-center gap-1 bg-white/15 px-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-yellow-300" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+                        </div>
+
+                        <div className="space-y-1 p-1.5">
+                          <div className="h-1.5 w-9 rounded bg-white/35" />
+                          <div className="h-1.5 w-12 rounded bg-white/25" />
+                          <div className="h-4 rounded bg-white/15" />
+                          <div className="h-1.5 w-10 rounded bg-lime-300/60" />
+                        </div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-[16px] leading-7 text-white/80">
+                  Chưa có link mạng xã hội.
+                </p>
+              )}
             </div>
           </div>
         </div>

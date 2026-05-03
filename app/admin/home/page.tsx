@@ -1,18 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+import { getHomeContent, updateHomeContent, uploadImage } from "@/lib/api";
 
 type InfoItem = {
   date: string;
   location: string;
-};
-
-type AttentionItem = {
-  title: string;
-  content: string;
-  postSlug: string;
 };
 
 type HeroSlide = {
@@ -23,12 +16,53 @@ type HeroSlide = {
   buttonLink: string;
 };
 
-type MapItem = {
-  title: string;
+type StrategicPartner = {
+  name: string;
+  logo: string;
   link: string;
-  buttonText: string;
-  publishedAt: string;
 };
+
+type HomeForm = {
+  siteName: string;
+  headerLogo: string;
+  partnerLogos: string[];
+
+  welcomeTitle: string;
+  welcomeText: string;
+  marqueeText: string;
+
+  heroSlides: HeroSlide[];
+
+  infoItems: InfoItem[];
+
+  strategicPartnersTitle: string;
+  strategicPartners: StrategicPartner[];
+
+  footerMailingText: string;
+  footerPhone: string;
+  footerEmail: string;
+  footerFacebookLink: string;
+  footerXLink: string;
+  footerLinkedinLink: string;
+  footerLogo: string;
+};
+
+type TabKey =
+  | "header"
+  | "welcome"
+  | "hero"
+  | "info"
+  | "strategicPartners"
+  | "footer";
+
+const tabs: { key: TabKey; label: string }[] = [
+  { key: "header", label: "Header" },
+  { key: "welcome", label: "Welcome" },
+  { key: "hero", label: "Hero Slider" },
+  { key: "info", label: "Info" },
+  { key: "strategicPartners", label: "Strategic Partners" },
+  { key: "footer", label: "Footer" },
+];
 
 const emptySlide = (): HeroSlide => ({
   image: "",
@@ -38,37 +72,111 @@ const emptySlide = (): HeroSlide => ({
   buttonLink: "#",
 });
 
+const emptyInfo = (): InfoItem => ({
+  date: "",
+  location: "",
+});
+
+const emptyStrategicPartner = (): StrategicPartner => ({
+  name: "",
+  logo: "",
+  link: "",
+});
+
+const initialForm: HomeForm = {
+  siteName: "",
+  headerLogo: "",
+  partnerLogos: ["", "", "", ""],
+
+  welcomeTitle: "Welcome to IMRWG",
+  welcomeText: "",
+  marqueeText: "",
+
+  heroSlides: [emptySlide()],
+
+  infoItems: [emptyInfo()],
+
+  strategicPartnersTitle: "STRATEGIC PARTNERS",
+  strategicPartners: [emptyStrategicPartner()],
+
+  footerMailingText: "",
+  footerPhone: "",
+  footerEmail: "",
+  footerFacebookLink: "",
+  footerXLink: "",
+  footerLinkedinLink: "",
+  footerLogo: "",
+};
+
+function normalizeExternalLink(link: string) {
+  const cleanLink = link.trim();
+
+  if (!cleanLink || cleanLink === "#") {
+    return "";
+  }
+
+  if (
+    cleanLink.startsWith("http://") ||
+    cleanLink.startsWith("https://") ||
+    cleanLink.startsWith("mailto:") ||
+    cleanLink.startsWith("tel:")
+  ) {
+    return cleanLink;
+  }
+
+  return `https://${cleanLink}`;
+}
+
+function findSocialLink(text: string, type: "facebook" | "x" | "linkedin") {
+  const links = text
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (type === "facebook") {
+    return (
+      links.find((link) => {
+        const lower = link.toLowerCase();
+        return lower.includes("facebook.com") || lower.includes("fb.com");
+      }) || ""
+    );
+  }
+
+  if (type === "x") {
+    return (
+      links.find((link) => {
+        const lower = link.toLowerCase();
+        return lower.includes("x.com") || lower.includes("twitter.com");
+      }) || ""
+    );
+  }
+
+  return (
+    links.find((link) => {
+      const lower = link.toLowerCase();
+      return lower.includes("linkedin.com");
+    }) || ""
+  );
+}
+
+function splitFooterContact(text: string) {
+  const lines = text
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return {
+    phone: lines[0] || "",
+    email: lines[1] || "",
+  };
+}
+
 export default function AdminHomePage() {
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("header");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [siteName, setSiteName] = useState("");
-  const [headerLogo, setHeaderLogo] = useState("");
-  const [partnerLogos, setPartnerLogos] = useState<string[]>(["", "", "", ""]);
-
-  const [welcomeTitle, setWelcomeTitle] = useState("Welcome to IMRWG");
-  const [welcomeText, setWelcomeText] = useState("");
-  const [marqueeText, setMarqueeText] = useState("");
-
-  const [heroImage, setHeroImage] = useState("");
-  const [heroTitle, setHeroTitle] = useState("");
-  const [heroDescription, setHeroDescription] = useState("");
-  const [heroButtonText, setHeroButtonText] = useState("");
-  const [heroButtonLink, setHeroButtonLink] = useState("");
-
-  const [footerLogo, setFooterLogo] = useState("");
-
-  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>([emptySlide()]);
-
-  const [infoItems, setInfoItems] = useState<InfoItem[]>([
-    { date: "", location: "" },
-  ]);
-
-  const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([
-    { title: "", content: "", postSlug: "" },
-  ]);
-  const [footerMailingText, setFooterMailingText] = useState("");
-  const [footerContactText, setFooterContactText] = useState("");
-  const [footerSocialText, setFooterSocialText] = useState("");
+  const [form, setForm] = useState<HomeForm>(initialForm);
 
   useEffect(() => {
     fetchHomeData();
@@ -76,821 +184,863 @@ export default function AdminHomePage() {
 
   const fetchHomeData = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/home`);
-      const result = await res.json();
+      setLoading(true);
 
-      console.log("HOME GET:", result);
-
+      const result = await getHomeContent();
       const data = result?.data;
-      if (!data) return;
 
-      setSiteName(data.siteName || "");
-      setHeaderLogo(data.headerLogo || "");
-      setFooterLogo(data.footerLogo || "");
-
-      setPartnerLogos(
-        Array.isArray(data.partnerLogos) && data.partnerLogos.length > 0
-          ? [...data.partnerLogos, "", "", "", ""].slice(0, 4)
-          : ["", "", "", ""]
-      );
-
-      setWelcomeTitle(data.welcomeTitle || "Welcome to IMRWG");
-      setWelcomeText(data.welcomeText || "");
-      setMarqueeText(data.marqueeText || "");
-
-      setHeroImage(data.heroImage || "");
-      setHeroTitle(data.heroTitle || "");
-      setHeroDescription(data.heroDescription || "");
-      setHeroButtonText(data.heroButtonText || "");
-      setHeroButtonLink(data.heroButtonLink || "");
-
-      if (Array.isArray(data.heroSlides) && data.heroSlides.length > 0) {
-        setHeroSlides(
-          data.heroSlides.map((slide: Partial<HeroSlide>) => ({
-            image: slide.image || "",
-            title: slide.title || "",
-            description: slide.description || "",
-            buttonText: slide.buttonText || "Know More",
-            buttonLink: slide.buttonLink || "#",
-          }))
-        );
-      } else if (data.heroImage) {
-        setHeroSlides([
-          {
-            image: data.heroImage || "",
-            title: data.heroTitle || "",
-            description: data.heroDescription || "",
-            buttonText: data.heroButtonText || "Know More",
-            buttonLink: data.heroButtonLink || "#",
-          },
-        ]);
-      } else {
-        setHeroSlides([emptySlide()]);
+      if (!data) {
+        setForm(initialForm);
+        return;
       }
 
-      if (Array.isArray(data.infoItems) && data.infoItems.length > 0) {
-        setInfoItems(
-          data.infoItems.map((item: Partial<InfoItem>) => ({
-            date: item.date || "",
-            location: item.location || "",
-          }))
-        );
-      } else {
-        setInfoItems([{ date: "", location: "" }]);
-      }
+      const loadedSlides =
+        Array.isArray(data.heroSlides) && data.heroSlides.length > 0
+          ? data.heroSlides.map((slide: Partial<HeroSlide>) => ({
+              image: slide.image || "",
+              title: slide.title || "",
+              description: slide.description || "",
+              buttonText: slide.buttonText || "Know More",
+              buttonLink: slide.buttonLink || "#",
+            }))
+          : data.heroImage
+          ? [
+              {
+                image: data.heroImage || "",
+                title: data.heroTitle || "",
+                description: data.heroDescription || "",
+                buttonText: data.heroButtonText || "Know More",
+                buttonLink: data.heroButtonLink || "#",
+              },
+            ]
+          : [emptySlide()];
 
-      if (Array.isArray(data.attentionItems) && data.attentionItems.length > 0) {
-        setAttentionItems(
-          data.attentionItems.map((item: Partial<AttentionItem>) => ({
-            title: item.title || "",
-            content: item.content || "",
-            postSlug: item.postSlug || "",
-          }))
-        );
-      } else {
-        setAttentionItems([{ title: "", content: "", postSlug: "" }]);
-      }
+      const loadedStrategicPartners =
+        Array.isArray(data.projectsItems) && data.projectsItems.length > 0
+          ? data.projectsItems.map((item: any) => ({
+              name: item.name || item.title || "",
+              logo: item.logo || item.imageUrl || "",
+              link: item.link || item.buttonLink || "",
+            }))
+          : [emptyStrategicPartner()];
 
+      const contact = splitFooterContact(data.footerContactText || "");
 
-      setFooterMailingText(data.footerMailingText || "");
-      setFooterContactText(data.footerContactText || "");
-      setFooterSocialText(data.footerSocialText || "");
+      setForm({
+        siteName: data.siteName || "",
+        headerLogo: data.headerLogo || "",
+        partnerLogos:
+          Array.isArray(data.partnerLogos) && data.partnerLogos.length > 0
+            ? [...data.partnerLogos, "", "", "", ""].slice(0, 4)
+            : ["", "", "", ""],
+
+        welcomeTitle: data.welcomeTitle || "Welcome to IMRWG",
+        welcomeText: data.welcomeText || "",
+        marqueeText: data.marqueeText || "",
+
+        heroSlides: loadedSlides,
+
+        infoItems:
+          Array.isArray(data.infoItems) && data.infoItems.length > 0
+            ? data.infoItems.map((item: Partial<InfoItem>) => ({
+                date: item.date || "",
+                location: item.location || "",
+              }))
+            : [emptyInfo()],
+
+        strategicPartnersTitle:
+          data.projectsSectionTitle || "STRATEGIC PARTNERS",
+        strategicPartners:
+          loadedStrategicPartners.length > 0
+            ? loadedStrategicPartners
+            : [emptyStrategicPartner()],
+
+        footerMailingText: data.footerMailingText || "",
+        footerPhone: contact.phone,
+        footerEmail: contact.email,
+        footerFacebookLink: findSocialLink(
+          data.footerSocialText || "",
+          "facebook"
+        ),
+        footerXLink: findSocialLink(data.footerSocialText || "", "x"),
+        footerLinkedinLink: findSocialLink(
+          data.footerSocialText || "",
+          "linkedin"
+        ),
+        footerLogo: data.footerLogo || "",
+      });
     } catch (error) {
       console.error("FETCH HOME ERROR:", error);
-      alert("Không lấy được dữ liệu home");
+      alert("Không lấy được dữ liệu Home");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const setField = <K extends keyof HomeForm>(field: K, value: HomeForm[K]) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
   };
 
   const uploadFile = async (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
+    const result = await uploadImage(file);
 
-    const res = await fetch(`${API_URL}/api/upload`, {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await res.json();
-    console.log("UPLOAD RESPONSE:", data);
-
-    if (!res.ok) {
-      throw new Error(data.message || "Upload thất bại");
+    if (!result?.url) {
+      throw new Error("Upload thành công nhưng không có URL");
     }
 
-    return data.url as string;
+    return result.url;
   };
 
-  const handleFooterLogoUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
+  const handleImageUpload = async (
+    file: File | undefined,
+    onSuccess: (url: string) => void
   ) => {
-    const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      setLoading(true);
+      setSaving(true);
       const url = await uploadFile(file);
-      setFooterLogo(url);
-      alert("Upload logo footer thành công. Nhớ bấm Lưu toàn bộ Home.");
+      onSuccess(url);
+      alert("Upload ảnh thành công. Nhớ bấm Lưu Home.");
     } catch (error) {
-      console.error("FOOTER LOGO UPLOAD ERROR:", error);
-      alert(error instanceof Error ? error.message : "Upload thất bại");
+      console.error("UPLOAD ERROR:", error);
+      alert(error instanceof Error ? error.message : "Upload ảnh thất bại");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  };
-
-  const handleHeaderLogoUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setLoading(true);
-      const url = await uploadFile(file);
-      setHeaderLogo(url);
-      alert("Upload logo chính thành công. Nhớ bấm Lưu toàn bộ Home.");
-    } catch (error) {
-      console.error("HEADER LOGO UPLOAD ERROR:", error);
-      alert(error instanceof Error ? error.message : "Upload thất bại");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePartnerLogoUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    index: number
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setLoading(true);
-      const url = await uploadFile(file);
-      const updated = [...partnerLogos];
-      updated[index] = url;
-      setPartnerLogos(updated);
-      alert("Upload logo phụ thành công. Nhớ bấm Lưu toàn bộ Home.");
-    } catch (error) {
-      console.error("PARTNER LOGO UPLOAD ERROR:", error);
-      alert(error instanceof Error ? error.message : "Upload thất bại");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleHeroSlideImageUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    index: number
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setLoading(true);
-      const url = await uploadFile(file);
-      updateHeroSlide(index, "image", url);
-      alert("Upload ảnh slide thành công. Nhớ bấm Lưu toàn bộ Home.");
-    } catch (error) {
-      console.error("HERO SLIDE IMAGE UPLOAD ERROR:", error);
-      alert(error instanceof Error ? error.message : "Upload thất bại");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateInfoItem = (
-    index: number,
-    field: keyof InfoItem,
-    value: string
-  ) => {
-    const updated = [...infoItems];
-    updated[index] = { ...updated[index], [field]: value };
-    setInfoItems(updated);
-  };
-
-  const addInfoItem = () => {
-    setInfoItems([...infoItems, { date: "", location: "" }]);
-  };
-
-  const removeInfoItem = (index: number) => {
-    const updated = infoItems.filter((_, i) => i !== index);
-    setInfoItems(updated.length ? updated : [{ date: "", location: "" }]);
-  };
-
-  const updateAttentionItem = (
-    index: number,
-    field: keyof AttentionItem,
-    value: string
-  ) => {
-    const updated = [...attentionItems];
-    updated[index] = { ...updated[index], [field]: value };
-
-    // nếu sửa title mà slug đang trống hoặc muốn tự sync slug
-    if (field === "title") {
-      updated[index].postSlug = value
-        .toLowerCase()
-        .trim()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/đ/g, "d")
-        .replace(/Đ/g, "d")
-        .replace(/[^a-z0-9\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-");
-    }
-
-    setAttentionItems(updated);
-  };
-
-  const addAttentionItem = () => {
-    setAttentionItems([
-      ...attentionItems,
-      { title: "", content: "", postSlug: "" },
-    ]);
-  };
-
-  const removeAttentionItem = (index: number) => {
-    const updated = attentionItems.filter((_, i) => i !== index);
-    setAttentionItems(
-      updated.length ? updated : [{ title: "", content: "", postSlug: "" }]
-    );
-  };
-
-
-  const updateHeroSlide = (
-    index: number,
-    field: keyof HeroSlide,
-    value: string
-  ) => {
-    const updated = [...heroSlides];
-    updated[index] = { ...updated[index], [field]: value };
-    setHeroSlides(updated);
-  };
-
-  const addHeroSlide = () => {
-    setHeroSlides([...heroSlides, emptySlide()]);
-  };
-
-  const removeHeroSlide = (index: number) => {
-    const updated = heroSlides.filter((_, i) => i !== index);
-    setHeroSlides(updated.length ? updated : [emptySlide()]);
-  };
-
-  const clearHeroSlideImage = (index: number) => {
-    updateHeroSlide(index, "image", "");
   };
 
   const saveHome = async () => {
     try {
-      setLoading(true);
+      setSaving(true);
 
-      const cleanedHeroSlides = heroSlides.filter(
-        (slide) =>
-          slide.image.trim() !== "" ||
-          slide.title.trim() !== "" ||
-          slide.description.trim() !== "" ||
-          slide.buttonText.trim() !== "" ||
-          slide.buttonLink.trim() !== ""
-      );
+      const firstSlide = form.heroSlides[0] || emptySlide();
 
-      const cleanedInfoItems = infoItems.filter(
-        (item) => item.date.trim() !== "" || item.location.trim() !== ""
-      );
+      const cleanedStrategicPartners = form.strategicPartners
+        .filter(
+          (item) => item.name.trim() || item.logo.trim() || item.link.trim()
+        )
+        .map((item) => {
+          const normalizedLink = normalizeExternalLink(item.link);
 
-      const cleanedAttentionItems = attentionItems.filter(
-        (item) =>
-          item.title.trim() !== "" ||
-          item.content.trim() !== "" ||
-          item.postSlug.trim() !== ""
-      );
+          return {
+            name: item.name,
+            title: item.name,
 
-      const body = {
-        siteName,
-        headerLogo,
-        welcomeTitle,
-        welcomeText,
-        marqueeText,
+            logo: item.logo,
+            imageUrl: item.logo,
 
-        heroImage: cleanedHeroSlides[0]?.image || heroImage || "",
-        heroTitle: cleanedHeroSlides[0]?.title || heroTitle || "",
-        heroDescription:
-          cleanedHeroSlides[0]?.description || heroDescription || "",
-        heroButtonText:
-          cleanedHeroSlides[0]?.buttonText || heroButtonText || "Know More",
-        heroButtonLink:
-          cleanedHeroSlides[0]?.buttonLink || heroButtonLink || "#",
+            link: normalizedLink,
+            buttonLink: normalizedLink,
 
-        heroSlides: cleanedHeroSlides,
-        infoItems: cleanedInfoItems,
-        attentionItems: cleanedAttentionItems,
+            buttonText: "Visit",
+            summary: "",
+            documentUrl: "",
+          };
+        });
 
-        footerMailingText,
-        footerContactText,
+      const footerSocialText = [
+        form.footerFacebookLink,
+        form.footerXLink,
+        form.footerLinkedinLink,
+      ]
+        .map((link) => normalizeExternalLink(link))
+        .filter(Boolean)
+        .join("\n");
+
+      const payload = {
+        siteName: form.siteName,
+        headerLogo: form.headerLogo,
+        partnerLogos: form.partnerLogos.filter(Boolean),
+
+        welcomeTitle: form.welcomeTitle,
+        welcomeText: form.welcomeText,
+        marqueeText: form.marqueeText,
+
+        heroImage: firstSlide.image,
+        heroTitle: firstSlide.title,
+        heroDescription: firstSlide.description,
+        heroButtonText: firstSlide.buttonText,
+        heroButtonLink: firstSlide.buttonLink,
+        heroSlides: form.heroSlides.filter(
+          (slide) =>
+            slide.image ||
+            slide.title ||
+            slide.description ||
+            slide.buttonText ||
+            slide.buttonLink
+        ),
+
+        infoItems: form.infoItems.filter(
+          (item) => item.date.trim() || item.location.trim()
+        ),
+
+        attentionItems: [],
+        mapsSectionTitle: "",
+        mapsItems: [],
+
+        projectsSectionTitle: form.strategicPartnersTitle,
+        projectsItems: cleanedStrategicPartners,
+
+        footerMailingText: form.footerMailingText,
+        footerContactText: `${form.footerPhone || ""}\n${
+          form.footerEmail || ""
+        }`,
         footerSocialText,
-        footerLogo,
-        partnerLogos: partnerLogos.filter((item) => item.trim() !== ""),
+        footerLogo: form.footerLogo,
       };
 
-      console.log("SAVE HOME BODY:", body);
+      const result = await updateHomeContent(payload);
 
-      const token =
-        localStorage.getItem("token") ||
-        localStorage.getItem("adminToken") ||
-        localStorage.getItem("accessToken");
-
-      const res = await fetch(`${API_URL}/api/home`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      const result = await res.json();
-      console.log("SAVE HOME RESPONSE:", result);
-
-      if (!res.ok) {
-        throw new Error(result.message || "Lưu Home thất bại");
-      }
-
-      alert("Lưu Home thành công");
-      fetchHomeData();
+      alert(result?.message || "Lưu Home thành công");
+      await fetchHomeData();
     } catch (error) {
       console.error("SAVE HOME ERROR:", error);
       alert(error instanceof Error ? error.message : "Lưu Home thất bại");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const previewUrl = (url: string) => {
-    if (!url) return "";
-    return url.startsWith("http") ? url : `${API_URL}${url}`;
-  };
-  const getFileNameFromPath = (path: string) => {
-  if (!path) return "";
-  return path.split("/").pop() || "";
-};
+  if (loading) {
+    return <div className="p-6 text-lg font-semibold">Đang tải Home...</div>;
+  }
 
   return (
-    <div className="space-y-8 p-6">
-      <h1 className="text-3xl font-bold">Quản lý Home</h1>
+    <div className="max-w-7xl">
+      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-lime-600">
+            Admin content
+          </p>
+          <h1 className="mt-2 text-4xl font-black text-slate-950">
+            Quản lý Home
+          </h1>
+          <p className="mt-2 text-slate-500">
+            Chỉnh từng phần của trang chủ bằng các tab bên dưới.
+          </p>
+        </div>
 
-      <section className="rounded-xl border p-5">
-        <h2 className="mb-4 text-xl font-semibold">Header</h2>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={fetchHomeData}
+            disabled={saving}
+            className="rounded-xl border border-slate-200 bg-white px-5 py-3 font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+          >
+            Tải lại
+          </button>
 
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block font-medium">Tên trang</label>
-            <input
-              className="w-full rounded border p-3"
-              value={siteName}
-              onChange={(e) => setSiteName(e.target.value)}
-              placeholder="Tên website"
+          <button
+            type="button"
+            onClick={saveHome}
+            disabled={saving}
+            className="rounded-xl bg-black px-6 py-3 font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? "Đang lưu..." : "Lưu Home"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-6 overflow-x-auto">
+        <div className="flex min-w-max gap-3 rounded-2xl bg-white p-2 shadow-sm">
+          {tabs.map((tab) => {
+            const active = activeTab === tab.key;
+
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`rounded-xl px-4 py-3 text-sm font-bold transition ${
+                  active
+                    ? "bg-lime-400 text-slate-950 shadow"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-[28px] border border-slate-100 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)] md:p-8">
+        {activeTab === "header" && (
+          <Section
+            title="Header"
+            description="Tên website, logo chính và logo đối tác ở phần đầu trang."
+          >
+            <TextInput
+              label="Tên trang"
+              value={form.siteName}
+              onChange={(value) => setField("siteName", value)}
+              placeholder="International Mekong Research Working Group (IMRWG)"
             />
-          </div>
 
-          <div>
-  <label className="mb-2 block font-medium">Logo chính</label>
+            <ImageUpload
+              label="Logo chính"
+              value={form.headerLogo}
+              onUpload={(file) =>
+                handleImageUpload(file, (url) => setField("headerLogo", url))
+              }
+              onClear={() => setField("headerLogo", "")}
+            />
 
-  <input
-    id="header-logo-upload"
-    type="file"
-    accept="image/*"
-    className="hidden"
-    onChange={handleHeaderLogoUpload}
-  />
+            <div>
+              <label className="mb-3 block font-semibold text-slate-800">
+                4 logo phụ trên Header
+              </label>
 
-  <div className="flex flex-wrap items-center gap-3">
-  <label
-    htmlFor="header-logo-upload"
-    className="inline-flex cursor-pointer items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-  >
-    Chọn logo từ máy
-  </label>
-</div>
+              <div className="grid gap-5 md:grid-cols-2">
+                {form.partnerLogos.map((logo, index) => (
+                  <ImageUpload
+                    key={index}
+                    label={`Logo phụ ${index + 1}`}
+                    value={logo}
+                    onUpload={(file) =>
+                      handleImageUpload(file, (url) => {
+                        const updated = [...form.partnerLogos];
+                        updated[index] = url;
+                        setField("partnerLogos", updated);
+                      })
+                    }
+                    onClear={() => {
+                      const updated = [...form.partnerLogos];
+                      updated[index] = "";
+                      setField("partnerLogos", updated);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </Section>
+        )}
 
-  {headerLogo && (
-    <img
-      src={previewUrl(headerLogo)}
-      alt="headerLogo"
-      className="mt-3 h-20 w-20 rounded-full border object-cover"
-    />
-  )}
-</div>
+        {activeTab === "welcome" && (
+          <Section
+            title="Welcome"
+            description="Nội dung giới thiệu ngắn và dòng chữ chạy trên trang chủ."
+          >
+            <TextInput
+              label="Welcome title"
+              value={form.welcomeTitle}
+              onChange={(value) => setField("welcomeTitle", value)}
+              placeholder="Welcome to IMRWG"
+            />
 
-          <div>
-  <p className="mb-2 font-medium">4 logo phụ</p>
-  <div className="grid gap-4 md:grid-cols-2">
-    {[0, 1, 2, 3].map((index) => (
-      <div key={index} className="rounded-lg border p-4">
-        <label className="mb-2 block font-medium">Logo phụ {index + 1}</label>
+            <TextArea
+              label="Welcome text"
+              value={form.welcomeText}
+              onChange={(value) => setField("welcomeText", value)}
+              placeholder="Nhập nội dung welcome..."
+            />
 
-        <input
-          id={`partner-logo-upload-${index}`}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => handlePartnerLogoUpload(e, index)}
-        />
+            <TextArea
+              label="Marquee text"
+              value={form.marqueeText}
+              onChange={(value) => setField("marqueeText", value)}
+              placeholder="Nhập dòng chữ chạy..."
+            />
+          </Section>
+        )}
 
-        <div className="flex flex-wrap items-center gap-3">
-  <label
-    htmlFor={`partner-logo-upload-${index}`}
-    className="inline-flex cursor-pointer items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-  >
-    Chọn file
-  </label>
-</div>
+        {activeTab === "hero" && (
+          <Section
+            title="Hero Slider"
+            description="Quản lý các slide lớn ở đầu trang chủ."
+          >
+            <div className="space-y-5">
+              {form.heroSlides.map((slide, index) => (
+                <ItemCard
+                  key={index}
+                  title={`Slide ${index + 1}`}
+                  onRemove={() => {
+                    const updated = form.heroSlides.filter(
+                      (_, i) => i !== index
+                    );
+                    setField(
+                      "heroSlides",
+                      updated.length ? updated : [emptySlide()]
+                    );
+                  }}
+                >
+                  <ImageUpload
+                    label="Ảnh slide"
+                    value={slide.image}
+                    onUpload={(file) =>
+                      handleImageUpload(file, (url) => {
+                        const updated = [...form.heroSlides];
+                        updated[index] = { ...updated[index], image: url };
+                        setField("heroSlides", updated);
+                      })
+                    }
+                    onClear={() => {
+                      const updated = [...form.heroSlides];
+                      updated[index] = { ...updated[index], image: "" };
+                      setField("heroSlides", updated);
+                    }}
+                  />
 
-        {partnerLogos[index] ? (
-          <img
-            src={previewUrl(partnerLogos[index])}
-            alt={`partnerLogo-${index}`}
-            className="mt-3 h-16 w-16 rounded-full border object-cover"
-          />
-        ) : (
-          <div className="mt-3 flex h-16 w-16 items-center justify-center rounded-full border border-dashed text-xs text-gray-400">
-            No image
-          </div>
+                  <TextInput
+                    label="Tiêu đề"
+                    value={slide.title}
+                    onChange={(value) => {
+                      const updated = [...form.heroSlides];
+                      updated[index] = { ...updated[index], title: value };
+                      setField("heroSlides", updated);
+                    }}
+                  />
+
+                  <TextArea
+                    label="Mô tả"
+                    value={slide.description}
+                    onChange={(value) => {
+                      const updated = [...form.heroSlides];
+                      updated[index] = {
+                        ...updated[index],
+                        description: value,
+                      };
+                      setField("heroSlides", updated);
+                    }}
+                  />
+
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <TextInput
+                      label="Button text"
+                      value={slide.buttonText}
+                      onChange={(value) => {
+                        const updated = [...form.heroSlides];
+                        updated[index] = {
+                          ...updated[index],
+                          buttonText: value,
+                        };
+                        setField("heroSlides", updated);
+                      }}
+                    />
+
+                    <TextInput
+                      label="Button link"
+                      value={slide.buttonLink}
+                      onChange={(value) => {
+                        const updated = [...form.heroSlides];
+                        updated[index] = {
+                          ...updated[index],
+                          buttonLink: value,
+                        };
+                        setField("heroSlides", updated);
+                      }}
+                    />
+                  </div>
+                </ItemCard>
+              ))}
+
+              <AddButton
+                label="+ Thêm slide"
+                onClick={() =>
+                  setField("heroSlides", [...form.heroSlides, emptySlide()])
+                }
+              />
+            </div>
+          </Section>
+        )}
+
+        {activeTab === "info" && (
+          <Section
+            title="Info"
+            description="Các dòng thời gian/địa điểm hiển thị trên Home."
+          >
+            <div className="space-y-5">
+              {form.infoItems.map((item, index) => (
+                <ItemCard
+                  key={index}
+                  title={`Info ${index + 1}`}
+                  onRemove={() => {
+                    const updated = form.infoItems.filter(
+                      (_, i) => i !== index
+                    );
+                    setField(
+                      "infoItems",
+                      updated.length ? updated : [emptyInfo()]
+                    );
+                  }}
+                >
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <TextInput
+                      label="Date"
+                      value={item.date}
+                      onChange={(value) => {
+                        const updated = [...form.infoItems];
+                        updated[index] = { ...updated[index], date: value };
+                        setField("infoItems", updated);
+                      }}
+                    />
+
+                    <TextInput
+                      label="Location"
+                      value={item.location}
+                      onChange={(value) => {
+                        const updated = [...form.infoItems];
+                        updated[index] = {
+                          ...updated[index],
+                          location: value,
+                        };
+                        setField("infoItems", updated);
+                      }}
+                    />
+                  </div>
+                </ItemCard>
+              ))}
+
+              <AddButton
+                label="+ Thêm info"
+                onClick={() =>
+                  setField("infoItems", [...form.infoItems, emptyInfo()])
+                }
+              />
+            </div>
+          </Section>
+        )}
+
+        {activeTab === "strategicPartners" && (
+          <Section
+            title="Strategic Partners"
+            description="Quản lý logo đối tác chiến lược trên trang chủ. Có thể thêm, xóa, đổi tên, upload logo và gắn link website ngoài."
+          >
+            <TextInput
+              label="Tiêu đề section"
+              value={form.strategicPartnersTitle}
+              onChange={(value) => setField("strategicPartnersTitle", value)}
+              placeholder="STRATEGIC PARTNERS"
+            />
+
+            <div className="space-y-5">
+              {form.strategicPartners.map((partner, index) => (
+                <ItemCard
+                  key={index}
+                  title={`Partner ${index + 1}`}
+                  onRemove={() => {
+                    const updated = form.strategicPartners.filter(
+                      (_, i) => i !== index
+                    );
+                    setField(
+                      "strategicPartners",
+                      updated.length ? updated : [emptyStrategicPartner()]
+                    );
+                  }}
+                >
+                  <ImageUpload
+                    label="Logo partner"
+                    value={partner.logo}
+                    onUpload={(file) =>
+                      handleImageUpload(file, (url) => {
+                        const updated = [...form.strategicPartners];
+                        updated[index] = {
+                          ...updated[index],
+                          logo: url,
+                        };
+                        setField("strategicPartners", updated);
+                      })
+                    }
+                    onClear={() => {
+                      const updated = [...form.strategicPartners];
+                      updated[index] = {
+                        ...updated[index],
+                        logo: "",
+                      };
+                      setField("strategicPartners", updated);
+                    }}
+                  />
+
+                  <TextInput
+                    label="Tên logo / tên đối tác"
+                    value={partner.name}
+                    onChange={(value) => {
+                      const updated = [...form.strategicPartners];
+                      updated[index] = {
+                        ...updated[index],
+                        name: value,
+                      };
+                      setField("strategicPartners", updated);
+                    }}
+                    placeholder="Ví dụ: HCMUNRE"
+                  />
+
+                  <TextInput
+                    label="Link website ngoài"
+                    value={partner.link}
+                    onChange={(value) => {
+                      const updated = [...form.strategicPartners];
+                      updated[index] = {
+                        ...updated[index],
+                        link: value,
+                      };
+                      setField("strategicPartners", updated);
+                    }}
+                    placeholder="Ví dụ: https://hcmunre.edu.vn hoặc hcmunre.edu.vn"
+                  />
+
+                  <p className="text-sm text-slate-500">
+                    Có thể nhập <b>https://example.com</b> hoặc chỉ nhập{" "}
+                    <b>example.com</b>. Khi lưu, hệ thống sẽ tự thêm https:// nếu
+                    thiếu.
+                  </p>
+                </ItemCard>
+              ))}
+
+              <AddButton
+                label="+ Thêm Strategic Partner"
+                onClick={() =>
+                  setField("strategicPartners", [
+                    ...form.strategicPartners,
+                    emptyStrategicPartner(),
+                  ])
+                }
+              />
+            </div>
+          </Section>
+        )}
+
+        {activeTab === "footer" && (
+          <Section title="Footer" description="Logo và nội dung footer website.">
+            <ImageUpload
+              label="Footer logo"
+              value={form.footerLogo}
+              onUpload={(file) =>
+                handleImageUpload(file, (url) => setField("footerLogo", url))
+              }
+              onClear={() => setField("footerLogo", "")}
+            />
+
+            <TextArea
+              label="Footer title / Mailing text"
+              value={form.footerMailingText}
+              onChange={(value) => setField("footerMailingText", value)}
+              placeholder="International Mekong Research Working Group (IMRWG)"
+            />
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <TextInput
+                label="Số điện thoại"
+                value={form.footerPhone}
+                onChange={(value) => setField("footerPhone", value)}
+                placeholder="Ví dụ: 0123456789"
+              />
+
+              <TextInput
+                label="Email"
+                value={form.footerEmail}
+                onChange={(value) => setField("footerEmail", value)}
+                placeholder="Ví dụ: contact@imrwg.org"
+              />
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-3">
+              <TextInput
+                label="Facebook link"
+                value={form.footerFacebookLink}
+                onChange={(value) => setField("footerFacebookLink", value)}
+                placeholder="facebook.com/imrwg"
+              />
+
+              <TextInput
+                label="X / Twitter link"
+                value={form.footerXLink}
+                onChange={(value) => setField("footerXLink", value)}
+                placeholder="x.com/imrwg"
+              />
+
+              <TextInput
+                label="LinkedIn link"
+                value={form.footerLinkedinLink}
+                onChange={(value) => setField("footerLinkedinLink", value)}
+                placeholder="linkedin.com/company/imrwg"
+              />
+            </div>
+
+            <p className="text-sm text-slate-500">
+              Có thể nhập đầy đủ <b>https://facebook.com/imrwg</b> hoặc chỉ nhập{" "}
+              <b>facebook.com/imrwg</b>. Khi lưu, hệ thống sẽ tự thêm https:// nếu
+              thiếu.
+            </p>
+          </Section>
         )}
       </div>
-    ))}
-  </div>
-</div>
-        </div>
-      </section>
-
-      <section className="rounded-xl border p-5">
-        <h2 className="mb-4 text-xl font-semibold">Nội dung đầu trang</h2>
-
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block font-medium">Welcome title</label>
-            <input
-              className="w-full rounded border p-3"
-              value={welcomeTitle}
-              onChange={(e) => setWelcomeTitle(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block font-medium">Welcome text</label>
-            <textarea
-              className="w-full rounded border p-3"
-              rows={5}
-              value={welcomeText}
-              onChange={(e) => setWelcomeText(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block font-medium">Marquee text</label>
-            <input
-              className="w-full rounded border p-3"
-              value={marqueeText}
-              onChange={(e) => setMarqueeText(e.target.value)}
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-xl border p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Slider giữa trang</h2>
-          <button
-            type="button"
-            onClick={addHeroSlide}
-            className="rounded bg-green-600 px-4 py-2 text-white"
-          >
-            + Thêm slide
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          {heroSlides.map((slide, index) => (
-            <div key={index} className="rounded-lg border p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-lg font-semibold">Slide {index + 1}</p>
-                <button
-                  type="button"
-                  onClick={() => removeHeroSlide(index)}
-                  className="rounded bg-red-600 px-4 py-2 text-white"
-                >
-                  Xóa slide
-                </button>
-              </div>
-
-              <div className="grid gap-4">
-                <div>
-                  <label className="mb-2 block font-medium">Ảnh</label>
-
-                  <input
-                    id={`hero-slide-image-${index}`}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => handleHeroSlideImageUpload(e, index)}
-                  />
-
-                  <label
-                    htmlFor={`hero-slide-image-${index}`}
-                    className="inline-block cursor-pointer rounded bg-blue-600 px-4 py-2 text-white"
-                  >
-                    Chọn ảnh từ máy
-                  </label>
-
-                  {slide.image ? (
-                    <div className="mt-3">
-                      <img
-                        src={previewUrl(slide.image)}
-                        alt={`slide-${index}`}
-                        className="h-48 w-full rounded border object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => clearHeroSlideImage(index)}
-                        className="mt-3 rounded border border-red-600 px-4 py-2 text-red-600"
-                      >
-                        Xóa ảnh hiện tại
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="mt-3 flex h-40 w-full items-center justify-center rounded border border-dashed text-gray-400">
-                      Chưa có ảnh
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="mb-1 block font-medium">Tiêu đề</label>
-                  <input
-                    className="w-full rounded border p-3"
-                    value={slide.title}
-                    onChange={(e) =>
-                      updateHeroSlide(index, "title", e.target.value)
-                    }
-                    placeholder="Nhập tiêu đề slide"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block font-medium">Mô tả</label>
-                  <textarea
-                    className="w-full rounded border p-3"
-                    rows={3}
-                    value={slide.description}
-                    onChange={(e) =>
-                      updateHeroSlide(index, "description", e.target.value)
-                    }
-                    placeholder="Nhập mô tả slide"
-                  />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block font-medium">Nút</label>
-                    <input
-                      className="w-full rounded border p-3"
-                      value={slide.buttonText}
-                      onChange={(e) =>
-                        updateHeroSlide(index, "buttonText", e.target.value)
-                      }
-                      placeholder="Ví dụ: Know More"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block font-medium">Link nút</label>
-                    <input
-                      className="w-full rounded border p-3"
-                      value={slide.buttonLink}
-                      onChange={(e) =>
-                        updateHeroSlide(index, "buttonLink", e.target.value)
-                      }
-                      placeholder="Ví dụ: /projects"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-xl border p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Bảng Thông tin</h2>
-          <button
-            type="button"
-            onClick={addInfoItem}
-            className="rounded bg-green-600 px-4 py-2 text-white"
-          >
-            + Thêm dòng
-          </button>
-        </div>
-
-        <div className="overflow-hidden rounded-lg border">
-          <div className="grid grid-cols-[1fr_2fr_auto] bg-gray-100">
-            <div className="border-r p-3 font-semibold">Date</div>
-            <div className="border-r p-3 font-semibold">Location</div>
-            <div className="p-3 font-semibold">Thao tác</div>
-          </div>
-
-          <div className="space-y-0">
-            {infoItems.map((item, index) => (
-              <div
-                key={index}
-                className="grid grid-cols-[1fr_2fr_auto] border-t"
-              >
-                <input
-                  className="border-r p-3 outline-none"
-                  placeholder="Date"
-                  value={item.date}
-                  onChange={(e) => updateInfoItem(index, "date", e.target.value)}
-                />
-                <input
-                  className="border-r p-3 outline-none"
-                  placeholder="Location"
-                  value={item.location}
-                  onChange={(e) =>
-                    updateInfoItem(index, "location", e.target.value)
-                  }
-                />
-                <div className="p-2">
-                  <button
-                    type="button"
-                    onClick={() => removeInfoItem(index)}
-                    className="rounded bg-red-600 px-4 py-2 text-white"
-                  >
-                    Xóa
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p className="mt-3 text-sm text-gray-500">
-          Mỗi dòng là một mục thông tin sẽ hiển thị ở bảng bên ngoài trang chủ.
-        </p>
-      </section>
-      <section className="rounded-xl border p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Attention</h2>
-          <button
-            type="button"
-            onClick={addAttentionItem}
-            className="rounded bg-green-600 px-4 py-2 text-white"
-          >
-            + Thêm bài
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          {attentionItems.map((item, index) => (
-            <div key={index} className="rounded-lg border p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-lg font-semibold">Bài {index + 1}</p>
-                <button
-                  type="button"
-                  onClick={() => removeAttentionItem(index)}
-                  className="rounded bg-red-600 px-4 py-2 text-white"
-                >
-                  Xóa
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-1 block font-medium">Tiêu đề</label>
-                  <input
-                    className="w-full rounded border p-3"
-                    value={item.title}
-                    onChange={(e) =>
-                      updateAttentionItem(index, "title", e.target.value)
-                    }
-                    placeholder="Nhập tiêu đề bài"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block font-medium">Slug</label>
-                  <input
-                    className="w-full rounded border p-3"
-                    value={item.postSlug}
-                    onChange={(e) =>
-                      updateAttentionItem(index, "postSlug", e.target.value)
-                    }
-                    placeholder="vi-du-ten-bai-viet"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block font-medium">Nội dung</label>
-                  <textarea
-                    className="w-full rounded border p-3"
-                    rows={6}
-                    value={item.content}
-                    onChange={(e) =>
-                      updateAttentionItem(index, "content", e.target.value)
-                    }
-                    placeholder="Nhập nội dung bài viết"
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-
-      <section className="rounded-xl border p-5">
-        <h2 className="mb-4 text-xl font-semibold">Footer</h2>
-
-        <div className="space-y-4">
-          <div>
-            <label className="mb-2 block font-medium">Logo footer</label>
-
-            <input
-              id="footer-logo-upload"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFooterLogoUpload}
-            />
-
-            <label
-              htmlFor="footer-logo-upload"
-              className="inline-block cursor-pointer rounded bg-blue-600 px-4 py-2 text-white"
-            >
-              Chọn logo từ máy
-            </label>
-
-            {footerLogo ? (
-              <div className="mt-3">
-                <img
-                  src={previewUrl(footerLogo)}
-                  alt="footerLogo"
-                  className="h-24 w-24 rounded-full border object-cover"
-                />
-              </div>
-            ) : (
-              <div className="mt-3 flex h-24 w-24 items-center justify-center rounded-full border border-dashed text-sm text-gray-400">
-                Chưa có logo
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="mb-1 block font-medium">
-              Tên footer / mailing text
-            </label>
-            <input
-              className="w-full rounded border p-3"
-              value={footerMailingText}
-              onChange={(e) => setFooterMailingText(e.target.value)}
-              placeholder="Ví dụ: Join our Mailing List"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block font-medium">Thông tin liên hệ</label>
-            <textarea
-              className="w-full rounded border p-3"
-              rows={4}
-              value={footerContactText}
-              onChange={(e) => setFooterContactText(e.target.value)}
-              placeholder="Ví dụ: Contact us:"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block font-medium">
-              Social / dòng mô tả phải
-            </label>
-            <textarea
-              className="w-full rounded border p-3"
-              rows={4}
-              value={footerSocialText}
-              onChange={(e) => setFooterSocialText(e.target.value)}
-              placeholder="Ví dụ: We are on:"
-            />
-          </div>
-        </div>
-      </section>
-
-      <button
-        onClick={saveHome}
-        className="rounded bg-black px-6 py-3 text-white"
-      >
-        Lưu toàn bộ Home
-      </button>
-
-      {loading && <p className="text-sm text-gray-500">Đang xử lý...</p>}
     </div>
+  );
+}
+
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-7 rounded-2xl bg-slate-50 p-5">
+        <h2 className="text-2xl font-black text-slate-950">{title}</h2>
+        {description ? (
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            {description}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-6">{children}</div>
+    </div>
+  );
+}
+
+function TextInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block font-semibold text-slate-800">{label}</label>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-lime-400 focus:ring-4 focus:ring-lime-100"
+      />
+    </div>
+  );
+}
+
+function TextArea({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block font-semibold text-slate-800">{label}</label>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="min-h-[130px] w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition focus:border-lime-400 focus:ring-4 focus:ring-lime-100"
+      />
+    </div>
+  );
+}
+
+function ImageUpload({
+  label,
+  value,
+  onUpload,
+  onClear,
+}: {
+  label: string;
+  value: string;
+  onUpload: (file: File | undefined) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+      <label className="mb-3 block font-semibold text-slate-800">{label}</label>
+
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="cursor-pointer rounded-xl bg-blue-600 px-5 py-3 font-bold text-white transition hover:bg-blue-700">
+          Chọn file
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => onUpload(e.target.files?.[0])}
+          />
+        </label>
+
+        {value ? (
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-xl border border-red-200 bg-white px-5 py-3 font-bold text-red-600 transition hover:bg-red-50"
+          >
+            Xóa ảnh
+          </button>
+        ) : null}
+      </div>
+
+      {value ? (
+        <div className="mt-4">
+          <img
+            src={value}
+            alt={label}
+            className="max-h-40 rounded-xl border bg-white object-contain p-2"
+          />
+          <p className="mt-2 break-all text-xs text-slate-500">{value}</p>
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-slate-400">Chưa có ảnh</p>
+      )}
+    </div>
+  );
+}
+
+function ItemCard({
+  title,
+  onRemove,
+  children,
+}: {
+  title: string;
+  onRemove: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <h3 className="text-xl font-black text-slate-950">{title}</h3>
+
+        <button
+          type="button"
+          onClick={onRemove}
+          className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white transition hover:bg-red-700"
+        >
+          Xóa
+        </button>
+      </div>
+
+      <div className="space-y-5">{children}</div>
+    </div>
+  );
+}
+
+function AddButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-xl bg-lime-400 px-5 py-3 font-black text-slate-950 transition hover:bg-lime-300"
+    >
+      {label}
+    </button>
   );
 }

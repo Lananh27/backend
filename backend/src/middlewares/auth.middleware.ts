@@ -1,39 +1,77 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { prisma } from "../lib/prisma";
 import { env } from "../config/env";
 
-interface JwtPayload {
+type JwtPayload = {
   userId: number;
   email: string;
   role: string;
+};
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: number;
+        email: string;
+        role: string;
+      };
+    }
+  }
 }
 
-export interface AuthRequest extends Request {
-  user?: JwtPayload;
+function getJwtSecret() {
+  if (!env.JWT_SECRET) {
+    throw new Error("Missing JWT_SECRET in environment variables");
+  }
+
+  return env.JWT_SECRET;
 }
 
-export const authMiddleware = (
-  req: AuthRequest,
+export async function authMiddleware(
+  req: Request,
   res: Response,
   next: NextFunction
-) => {
+) {
   try {
     const authHeader = req.headers.authorization;
 
-    // Kiểm tra header Authorization
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Unauthorized" });
+    const token = authHeader?.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : null;
+
+    if (!token) {
+      return res.status(401).json({
+        message: "Vui lòng đăng nhập",
+      });
     }
 
-    // Tách token từ header
-    const token = authHeader.split(" ")[1];
-    
-    // Xác thực và giải mã token
-    const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload;
 
-    req.user = decoded; // Lưu thông tin người dùng vào request
-    next(); // Tiếp tục xử lý yêu cầu API
+    const user = await prisma.user.findUnique({
+      where: {
+        id: decoded.userId,
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        message: "Tài khoản không tồn tại",
+      });
+    }
+
+    req.user = user;
+
+    return next();
   } catch (error) {
-    return res.status(401).json({ message: "Invalid or expired token" });
+    return res.status(401).json({
+      message: "Token không hợp lệ hoặc đã hết hạn",
+    });
   }
-};
+}

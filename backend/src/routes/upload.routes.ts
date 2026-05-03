@@ -1,66 +1,122 @@
 import { Router } from "express";
 import multer from "multer";
+import AWS from "aws-sdk";
 import path from "path";
-import fs from "fs";
+import crypto from "crypto";
+import { env } from "../config/env";
+import { authMiddleware } from "../middlewares/auth.middleware";
+import { adminMiddleware } from "../middlewares/admin.middleware";
 
-// Định nghĩa đường dẫn lưu trữ file upload
 const router = Router();
-const uploadDir = path.join(process.cwd(), "uploads");
 
-// Tạo thư mục nếu chưa tồn tại
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Cấu hình multer để xử lý file upload
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadDir);
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
   },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, ext).replace(/\s+/g, "-");
-    cb(null, `${Date.now()}-${baseName}${ext}`);
-  },
-});
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/x-png",
+      "image/webp",
+      "image/gif",
+      "image/pjpeg",
+      "application/pdf",
+    ];
 
-const upload = multer({ storage });
-
-// Route để tải lên file
-router.post("/", upload.single("file"), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: "Không có file được tải lên" });
+    if (!allowedTypes.includes(file.mimetype)) {
+      return cb(
+        new Error(
+          "File không hợp lệ. Chỉ cho phép JPG, PNG, WEBP, GIF hoặc PDF."
+        )
+      );
     }
 
-    return res.status(200).json({
-      message: "Upload thành công",
-      url: `/uploads/${req.file.filename}`,
-    });
-  } catch (error) {
-    console.error("UPLOAD ERROR:", error);
-    return res.status(500).json({ message: "Upload thất bại" });
-  }
+    cb(null, true);
+  },
 });
 
-// Thêm route lấy bài viết theo ID
-router.get("/post/:id", (req, res) => {
-  const { id } = req.params;
-
-  // Giả sử bạn có một cơ sở dữ liệu (hoặc file) lưu trữ bài viết
-  // Dưới đây là một ví dụ giả lập dữ liệu bài viết từ một file JSON
-  const posts = [
-    { id: "1", title: "Bài viết 1", content: "Nội dung bài viết 1" },
-    { id: "2", title: "Bài viết 2", content: "Nội dung bài viết 2" },
-  ];
-
-  const post = posts.find((post) => post.id === id);
-
-  if (!post) {
-    return res.status(404).json({ message: "Bài viết không tồn tại" });
+function getS3Client() {
+  if (
+    !env.AWS_ACCESS_KEY_ID ||
+    !env.AWS_SECRET_ACCESS_KEY ||
+    !env.AWS_S3_BUCKET
+  ) {
+    throw new Error("Thiếu cấu hình AWS S3 trong biến môi trường");
   }
 
-  res.json(post);
-});
+  return new AWS.S3({
+    region: env.AWS_REGION,
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+  });
+}
+
+function createSafeFileName(originalName: string) {
+  const ext = path.extname(originalName).toLowerCase();
+
+  const baseName = path
+    .basename(originalName, ext)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-_]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+
+  const randomName = crypto.randomUUID();
+
+  return `uploads/${Date.now()}-${baseName || "file"}-${randomName}${ext}`;
+}
+
+router.post(
+  "/",
+  authMiddleware,
+  adminMiddleware,
+  upload.single("file"),
+  async (req, res) => {
+    console.log("S3 UPLOAD ROUTE HIT");
+
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          message: "Không có file được tải lên",
+        });
+      }
+
+      const s3 = getS3Client();
+      const key = createSafeFileName(req.file.originalname);
+
+      await s3
+        .putObject({
+          Bucket: env.AWS_S3_BUCKET as string,
+          Key: key,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype,
+        })
+        .promise();
+
+      const url = `https://${env.AWS_S3_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
+
+      console.log("S3 UPLOAD SUCCESS:", url);
+
+      return res.status(200).json({
+        message: "Upload thành công",
+        url,
+        key,
+      });
+    } catch (error) {
+      console.error("UPLOAD ERROR:", error);
+
+      const message = error instanceof Error ? error.message : "Upload thất bại";
+
+      return res.status(500).json({
+        message,
+      });
+    }
+  }
+);
 
 export default router;

@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Container from "@/components/layout/Container";
 import Link from "next/link";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { getPeople } from "@/lib/api";
-import { useRef } from "react";
+import { getPeople, getProjects } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -39,13 +38,20 @@ type MapItem = {
 };
 
 type ProjectItem = {
+  id?: number;
   title: string;
-  subtitle: string;
-  description: string;
-  bullets: string[];
-  image: string;
-  readMoreLink: string;
-  publishedAt: string;
+  slug?: string;
+  subtitle?: string;
+  description?: string;
+  bullets?: string[];
+  image?: string;
+  readMoreLink?: string;
+  publishedAt?: string;
+  category?: string;
+  researchArea?: string;
+  status?: string;
+  yearRange?: string;
+  membersCount?: string;
 };
 
 type HomeContent = {
@@ -63,7 +69,7 @@ type HomeContent = {
   infoItems?: InfoItem[];
   attentionItems?: AttentionItem[];
   projectsSectionTitle?: string;
-  projectsItems?: ProjectItem[];
+  projectsItems?: any[];
   mapsSectionTitle?: string;
   mapsItems?: MapItem[];
   footerMailingText?: string;
@@ -71,8 +77,6 @@ type HomeContent = {
   footerSocialText?: string;
   footerLogo?: string;
   partnerLogos?: string[] | null;
-  
-  
 };
 
 type PersonItem = {
@@ -86,16 +90,73 @@ type PersonItem = {
   avatar?: string | null;
   bio?: string;
 };
+
 export default function Home() {
   const [home, setHome] = useState<HomeContent | null>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentInfoPage, setCurrentInfoPage] = useState(0);
   const [people, setPeople] = useState<PersonItem[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+
   const peopleSliderRef = useRef<HTMLDivElement>(null);
 
   const imgUrl = (url?: string | null) => {
     if (!url || !url.trim()) return "";
     return url.startsWith("http") ? url : `${API_URL}${url}`;
+  };
+
+  const getMapEmbedSrc = (link?: string | null, fallbackQuery?: string) => {
+    const raw = link?.trim() || "";
+
+    if (!raw && !fallbackQuery?.trim()) return "";
+
+    // Nếu admin dán nguyên thẻ iframe thì lấy src ra
+    const srcMatch = raw.match(/src=["']([^"']+)["']/i);
+    if (srcMatch?.[1]) {
+      return srcMatch[1];
+    }
+
+    // Nếu đã là link embed chuẩn thì dùng luôn
+    if (raw.includes("google.com/maps/embed")) {
+      return raw;
+    }
+
+    // Nếu link có tọa độ dạng @10.123,106.123
+    const coordMatch = raw.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (coordMatch?.[1] && coordMatch?.[2]) {
+      return `https://maps.google.com/maps?q=${coordMatch[1]},${coordMatch[2]}&z=15&output=embed`;
+    }
+
+    // Nếu link có dạng /place/Ten-dia-diem
+    const placeMatch = raw.match(/\/place\/([^/@?]+)/);
+    if (placeMatch?.[1]) {
+      const placeName = decodeURIComponent(placeMatch[1]).replace(/\+/g, " ");
+      return `https://maps.google.com/maps?q=${encodeURIComponent(
+        placeName
+      )}&z=15&output=embed`;
+    }
+
+    // Nếu là link maps thường có query q
+    try {
+      if (raw.startsWith("http")) {
+        const url = new URL(raw);
+        const q = url.searchParams.get("q");
+
+        if (q) {
+          return `https://maps.google.com/maps?q=${encodeURIComponent(
+            q
+          )}&z=15&output=embed`;
+        }
+      }
+    } catch (_error) {
+      // bỏ qua nếu URL không hợp lệ
+    }
+
+    // Nếu admin dán link thường hoặc text địa điểm thì ép thành query embed
+    const query = raw || fallbackQuery || "";
+    return `https://maps.google.com/maps?q=${encodeURIComponent(
+      query
+    )}&z=15&output=embed`;
   };
 
   const scrollPeople = (direction: "left" | "right") => {
@@ -110,11 +171,12 @@ export default function Home() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [homeRes, peopleRes] = await Promise.all([
+        const [homeRes, peopleRes, projectsRes] = await Promise.all([
           fetch(`${API_URL}/api/home`)
             .then((res) => (res.ok ? res.json() : null))
             .catch(() => null),
           getPeople(),
+          getProjects(),
         ]);
 
         if (homeRes?.data) {
@@ -131,18 +193,25 @@ export default function Home() {
           setPeople([]);
         }
 
+        if (Array.isArray(projectsRes?.data)) {
+          setProjects(projectsRes.data);
+        } else {
+          setProjects([]);
+        }
+
         console.log("HOME DATA:", homeRes);
         console.log("PEOPLE DATA:", peopleRes);
+        console.log("PROJECTS DATA:", projectsRes);
       } catch (error) {
         console.error("FETCH HOME PAGE ERROR:", error);
         setHome(null);
         setPeople([]);
+        setProjects([]);
       }
     };
 
     fetchData();
   }, []);
-
 
   const infoItems = Array.isArray(home?.infoItems) ? home.infoItems : [];
 
@@ -191,6 +260,7 @@ export default function Home() {
 
   const itemsPerPage = 4;
   const totalInfoPages = Math.max(1, Math.ceil(infoItems.length / itemsPerPage));
+
   const paginatedInfoItems = infoItems.slice(
     currentInfoPage * itemsPerPage,
     currentInfoPage * itemsPerPage + itemsPerPage
@@ -210,6 +280,7 @@ export default function Home() {
 
   const goPrevSlide = () => {
     if (heroSlides.length === 0) return;
+
     setCurrentSlide((prev) =>
       prev === 0 ? heroSlides.length - 1 : prev - 1
     );
@@ -217,21 +288,21 @@ export default function Home() {
 
   const goNextSlide = () => {
     if (heroSlides.length === 0) return;
+
     setCurrentSlide((prev) =>
       prev === heroSlides.length - 1 ? 0 : prev + 1
     );
   };
 
-  const sortedProjects = Array.isArray(home?.projectsItems)
-    ? [...home.projectsItems].sort(
+  const sortedProjects = Array.isArray(projects)
+    ? [...projects].sort(
         (a, b) =>
           new Date(b.publishedAt || "1970-01-01").getTime() -
           new Date(a.publishedAt || "1970-01-01").getTime()
       )
     : [];
 
-  const featuredProject =
-    sortedProjects.length > 0 ? sortedProjects[0] : null;
+  const newestProject = sortedProjects.length > 0 ? sortedProjects[0] : null;
 
   const sortedMaps = Array.isArray(home?.mapsItems)
     ? [...home.mapsItems].sort(
@@ -242,27 +313,9 @@ export default function Home() {
     : [];
 
   const homeMaps = sortedMaps.slice(0, 3);
+
   const currentHeroSlide = heroSlides[currentSlide];
   const currentHeroImage = imgUrl(currentHeroSlide?.image);
-
-const [peopleStart, setPeopleStart] = useState(0);
-
-const visiblePeople = useMemo(() => {
-  if (!people || people.length === 0) return [];
-  return people.slice(peopleStart, peopleStart + 5);
-}, [people, peopleStart]);
-const handlePrevPeople = () => {
-  if (!people || people.length <= 5) return;
-  setPeopleStart((prev) => Math.max(prev - 5, 0));
-};
-
-const handleNextPeople = () => {
-  if (!people || people.length <= 5) return;
-  setPeopleStart((prev) => {
-    const next = prev + 5;
-    return next >= people.length ? prev : next;
-  });
-};
 
   return (
     <>
@@ -276,9 +329,9 @@ const handleNextPeople = () => {
         <section className="py-10">
           <Container>
             <div className="text-center">
-              <h1 className="text-[56px] font-bold">
-                {home?.welcomeTitle || "Welcome to IMRWG"}
-              </h1>
+              <h1 className="text-[56px] font-bold text-[#0b3f75]">
+  {home?.welcomeTitle || "Welcome to IMRWG"}
+</h1>
 
               <p className="mx-auto mt-4 max-w-[1500px] text-[24px] leading-10">
                 {home?.welcomeText || (
@@ -306,18 +359,19 @@ const handleNextPeople = () => {
 
         <section className="pb-10">
           <Container>
-            <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)_300px] xl:grid-cols-[320px_minmax(0,1fr)_340px]">
-              <div>
-                <h2 className="mb-5 text-[25px] font-bold">
+            <div className="grid items-start gap-6 lg:grid-cols-[245px_minmax(0,1fr)_255px] xl:grid-cols-[270px_minmax(0,1fr)_285px]">
+              <div className="h-full">
+                <h2 className="mb-5 text-[24px] font-bold leading-tight">
                   IMRWG Scientific Group Meeting Schedule
                 </h2>
 
                 <div className="overflow-hidden border border-gray-300 bg-white">
                   <div className="grid grid-cols-2 bg-[#4b5a6f] text-white">
-                    <div className="border-r border-gray-300 p-4 text-[16px] font-semibold">
+                    <div className="border-r border-gray-300 p-4 text-[15px] font-semibold">
                       Date
                     </div>
-                    <div className="p-4 text-[16px] font-semibold">
+
+                    <div className="p-4 text-[15px] font-semibold">
                       Location
                     </div>
                   </div>
@@ -328,14 +382,15 @@ const handleNextPeople = () => {
                         key={index}
                         className="grid grid-cols-2 border-t border-gray-300"
                       >
-                        <div className="border-r border-gray-300 p-4 text-[16px] font-semibold">
+                        <div className="border-r border-gray-300 p-4 text-[15px] font-semibold">
                           {item.date}
                         </div>
-                        <div className="p-4 text-[16px]">{item.location}</div>
+
+                        <div className="p-4 text-[15px]">{item.location}</div>
                       </div>
                     ))
                   ) : (
-                    <div className="p-4 text-[16px] text-gray-500">
+                    <div className="p-4 text-[15px] text-gray-500">
                       Meeting data is not available.
                     </div>
                   )}
@@ -355,19 +410,21 @@ const handleNextPeople = () => {
                         ‹
                       </button>
 
-                      {Array.from({ length: totalInfoPages }).map((_, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setCurrentInfoPage(index)}
-                          className={`rounded border px-4 py-2 ${
-                            currentInfoPage === index
-                              ? "bg-[#9ac06f] text-white"
-                              : "bg-white"
-                          }`}
-                        >
-                          {index + 1}
-                        </button>
-                      ))}
+                      {Array.from({ length: totalInfoPages }).map(
+                        (_, index) => (
+                          <button
+                            key={index}
+                            onClick={() => setCurrentInfoPage(index)}
+                            className={`rounded border px-4 py-2 ${
+                              currentInfoPage === index
+                                ? "bg-[#9ac06f] text-white"
+                                : "bg-white"
+                            }`}
+                          >
+                            {index + 1}
+                          </button>
+                        )
+                      )}
 
                       <button
                         onClick={() =>
@@ -389,15 +446,17 @@ const handleNextPeople = () => {
               </div>
 
               <div className="min-w-0">
-                {heroSlides.length > 0 && currentHeroSlide && currentHeroImage ? (
-                  <div className="relative h-[520px] overflow-hidden bg-black">
+                {heroSlides.length > 0 &&
+                currentHeroSlide &&
+                currentHeroImage ? (
+                  <div className="relative h-[380px] overflow-hidden bg-black">
                     <img
                       src={currentHeroImage}
                       alt={currentHeroSlide.title || "Slide image"}
-                      className="h-full w-full object-cover"
+                      className="absolute inset-0 h-full w-full object-cover object-center"
                     />
 
-                    <div className="absolute inset-0 bg-black/30" />
+                    <div className="absolute inset-0 bg-black/15" />
 
                     <button
                       onClick={goPrevSlide}
@@ -414,21 +473,21 @@ const handleNextPeople = () => {
                     </button>
 
                     <div className="absolute bottom-8 left-10 right-10 text-white">
-                      <div className="mb-4 inline-block rounded-full bg-lime-400 px-5 py-2 font-semibold text-black">
-                        Mới nhất
-                      </div>
+                      <div className="mb-4 inline-block rounded-full bg-blue-600 px-5 py-2 font-semibold text-white">
+  Latest
+</div>
 
-                      <h3 className="max-w-[700px] text-[42px] font-bold leading-tight xl:text-[54px]">
+                      <h3 className="max-w-[650px] text-[32px] font-bold leading-tight xl:text-[40px]">
                         {currentHeroSlide.title}
                       </h3>
 
-                      <p className="mt-4 max-w-[900px] text-[18px] leading-8">
+                      <p className="mt-4 max-w-[760px] line-clamp-2 text-[16px] leading-7">
                         {currentHeroSlide.description}
                       </p>
 
                       <a
                         href={currentHeroSlide.buttonLink || "#"}
-                        className="mt-6 inline-block rounded bg-white px-8 py-4 text-[18px] font-semibold text-black"
+                        className="mt-6 inline-block rounded bg-black px-7 py-3 text-[16px] font-semibold text-white"
                       >
                         {currentHeroSlide.buttonText || "Know More"}
                       </a>
@@ -437,116 +496,112 @@ const handleNextPeople = () => {
                     {heroSlides.length > 1 && (
                       <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-3">
                         {heroSlides.map((_, index) => (
-                          <button
-                            key={index}
-                            onClick={() => setCurrentSlide(index)}
-                            className={`h-4 w-4 rounded-full ${
-                              currentSlide === index
-                                ? "bg-lime-400"
-                                : "bg-white/70"
-                            }`}
-                          />
-                        ))}
+  <button
+    key={index}
+    onClick={() => setCurrentSlide(index)}
+    className={`h-4 w-4 rounded-full ${
+      currentSlide === index ? "bg-[#0b5cad]" : "bg-white/70"
+    }`}
+  />
+))}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="flex h-[430px] w-full items-center justify-center bg-gray-300 text-[20px] text-gray-600">
+                  <div className="flex h-[380px] w-full items-center justify-center bg-gray-300 text-[20px] text-gray-600">
                     There is no image in the middle of the page.
                   </div>
                 )}
               </div>
 
-              <div className="h-fit border border-[#9ab27b] bg-[#e6ebde] p-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-[28px] font-bold">Attention</h2>
-                  <Link
-                    href="/documents/attention"
-                    className="text-[18px] text-[#648248] hover:underline"
-                  >
-                    View All
-                  </Link>
-                </div>
+              <div className="h-fit border border-[#8cc6ff] bg-[#FFFFFF] p-5">
+  <div className="flex items-center justify-between">
+    <h2 className="text-[28px] font-bold text-black">Attention</h2>
 
-                <div className="mt-5 space-y-6 border-t border-[#b6c5a6] pt-5">
-                  {attentionItems.map((item, index) => (
-                    <div key={index} className="flex gap-3 text-[#6a8444]">
-                      <span className="mt-2 h-3 w-3 shrink-0 bg-[#9ac06f]" />
-                      <div className="text-[18px] leading-8">
-                        <Link
-                          href={`/documents/attention/${item.postSlug}`}
-                          className="text-[#1d7bba] hover:underline"
-                        >
-                          {item.title}
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+    <Link
+      href="/documents/"
+      className="text-[18px] font-semibold text-[#0b5cad] underline underline-offset-4 hover:text-[#063f7d]"
+    >
+      View All
+    </Link>
+  </div>
+
+  <div className="mt-5 space-y-5 border-t border-[#b9dfff] pt-5">
+    {attentionItems.slice(0, 3).map((item, index) => (
+      <div key={index} className="flex gap-3 text-[#0b5cad]">
+        <span className="mt-2 h-3 w-3 shrink-0 bg-[#0b5cad]" />
+
+        <div className="text-[17px] leading-8">
+          <Link
+            href={`/documents/attention/${item.postSlug}`}
+            className="text-[#0b5cad] hover:text-[#063f7d] hover:underline"
+          >
+            {item.title}
+          </Link>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
             </div>
 
-            <section className="mt-6 bg-white py-10">
+            <section className="mt-6 bg-white py-12">
               <Container>
                 <div className="space-y-8">
-                  <h2 className="text-[32px] font-bold text-[#2c3e50]">
-                    {home?.projectsSectionTitle || "Projects"}
+                  <h2 className="text-[32px] font-black uppercase tracking-[0.08em] text-[#1f3b63]">
+                    New project
                   </h2>
 
-                  {featuredProject ? (
-                    <div className="grid items-center gap-12 lg:grid-cols-[1fr_2fr]">
-                      <div className="h-full overflow-hidden rounded-lg bg-gradient-to-br from-blue-500 to-green-500">
-                        {imgUrl(featuredProject.image) ? (
+                  {newestProject ? (
+                    <div className="grid items-center gap-10 lg:grid-cols-[430px_minmax(0,1fr)]">
+                      <Link
+                        href={
+                          newestProject.readMoreLink ||
+                          (newestProject.slug
+                            ? `/projects/${newestProject.slug}`
+                            : "/projects")
+                        }
+                        className="block h-[230px] overflow-hidden rounded-[12px] bg-gradient-to-br from-blue-500 via-cyan-500 to-green-500 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                      >
+                        {imgUrl(newestProject.image) ? (
                           <img
-                            src={imgUrl(featuredProject.image) || undefined}
-                            alt={featuredProject.title}
-                            className="min-h-[320px] h-full w-full object-cover"
+                            src={imgUrl(newestProject.image) || undefined}
+                            alt={newestProject.title || "Project image"}
+                            className="h-full w-full object-cover transition duration-300 hover:scale-105"
                           />
-                        ) : null}
-                      </div>
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[17px] font-bold text-white">
+                            No image
+                          </div>
+                        )}
+                      </Link>
 
-                      <div className="space-y-4">
-                        <p className="text-[14px] text-gray-500">
-                          {featuredProject.publishedAt
-                            ? new Date(
-                                featuredProject.publishedAt
-                              ).toLocaleDateString("vi-VN")
-                            : ""}
-                        </p>
-
-                        <h3 className="text-[28px] font-bold text-[#2c3e50]">
-                          {featuredProject.title}
+                      <div>
+                        <h3 className="text-[30px] font-black leading-tight text-[#1f3b63]">
+                          {newestProject.title || "Untitled project"}
                         </h3>
 
-                        {featuredProject.subtitle ? (
-                          <h4 className="text-[24px] font-semibold text-[#2c3e50]">
-                            {featuredProject.subtitle}
-                          </h4>
-                        ) : null}
-
-                        <p className="text-[18px] text-[#7f8c8d]">
-                          {featuredProject.description}
+                        <p className="mt-5 max-w-[850px] text-[18px] font-medium leading-8 text-[#52657f]">
+                          {newestProject.description ||
+                            newestProject.subtitle ||
+                            "No description for this project yet."}
                         </p>
 
-                        <ul className="list-disc space-y-2 pl-5 text-[16px] text-[#7f8c8d]">
-                          {(Array.isArray(featuredProject.bullets)
-                            ? featuredProject.bullets
-                            : []
-                          ).map((bullet, bulletIndex) => (
-                            <li key={bulletIndex}>{bullet}</li>
-                          ))}
-                        </ul>
-
                         <Link
-                          href={featuredProject.readMoreLink || "/projects"}
-                          className="mt-6 inline-block text-[18px] text-[#1d7bba] hover:underline"
-                        >
-                          Read more
-                        </Link>
+  href={
+    newestProject.readMoreLink ||
+    (newestProject.slug
+      ? `/projects/${newestProject.slug}`
+      : "/projects")
+  }
+  className="mt-6 inline-block text-[18px] font-semibold text-[#0b5cad] underline underline-offset-4 hover:text-[#063f7d]"
+>
+  Read more →
+</Link>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-[18px] text-gray-500">
+                    <div className="rounded-[16px] border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-8 text-center text-[17px] font-semibold text-gray-500">
                       There are no projects yet.
                     </div>
                   )}
@@ -556,154 +611,67 @@ const handleNextPeople = () => {
           </Container>
         </section>
 
-        <section className="py-10 bg-[#9ac06f]">
+        <section className="bg-gradient-to-br from-[#071326] via-[#102446] to-[#1d4f91] py-14">
   <Container>
     <div className="grid items-stretch gap-8 lg:grid-cols-3">
       {homeMaps.length > 0 ? (
-        homeMaps.map((item, index) => (
-          <div
-            key={index}
-            className="flex h-[380px] flex-col rounded-lg bg-white p-6 shadow-lg transition-all hover:shadow-xl"
-          >
-            <h3 className="min-h-[72px] line-clamp-2 text-[24px] font-bold leading-tight text-[#004b7f]">
-              {item.title}
-            </h3>
+        homeMaps.slice(0, 3).map((item, index) => {
+          const mapSrc = getMapEmbedSrc(
+            item.link,
+            `${item.title} ${item.content}`
+          );
 
-            <div className="mt-4 mb-4 h-[160px] overflow-hidden rounded-lg border bg-[#cce7ff]">
-              {item.link ? (
-                <iframe
-                  src={item.link}
-                  title={item.title}
-                  className="pointer-events-none h-full w-full border-0"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-gray-500">
-                  No map available.
-                </div>
-              )}
-            </div>
+          return (
+            <div
+              key={index}
+              className="flex h-[390px] flex-col overflow-hidden rounded-[24px] border border-white/15 bg-white shadow-[0_18px_45px_rgba(0,0,0,0.28)] transition-all hover:-translate-y-1 hover:shadow-[0_24px_55px_rgba(0,0,0,0.35)]"
+            >
+              <div className="p-6 pb-3">
+                <h3 className="min-h-[58px] line-clamp-2 text-[24px] font-black leading-tight text-[#0f2342]">
+                  {item.title}
+                </h3>
+              </div>
 
-            <div className="mt-auto flex justify-center">
-              <Link
-                href={`/maps/${item.slug}`}
-                className="inline-block rounded-lg bg-[#cce7ff] px-4 py-2 font-semibold text-[#004b7f] hover:bg-[#b6d9f0]"
-              >
-                {item.buttonText || "View Map"}
-              </Link>
+              <div className="mx-6 mb-5 mt-2 h-[170px] overflow-hidden rounded-[18px] border border-[#c7d7e8] bg-[#e8f3ff]">
+                {mapSrc ? (
+                  <iframe
+                    src={mapSrc}
+                    title={item.title || `Map ${index + 1}`}
+                    className="h-full w-full border-0"
+                    loading="lazy"
+                    allowFullScreen
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-gray-500">
+                    No map available.
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-auto flex justify-center px-6 pb-6">
+                <Link
+                  href={`/maps/${item.slug}`}
+                  className="inline-flex items-center justify-center rounded-[14px] bg-gradient-to-r from-[#1d7bba] to-[#2563eb] px-6 py-3 text-[16px] font-black text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+                >
+                  {item.buttonText || "View Map"} →
+                </Link>
+              </div>
             </div>
-          </div>
-        ))
+          );
+        })
       ) : (
         <>
-          <div className="h-[380px] rounded-lg bg-white p-6 shadow-lg" />
-          <div className="h-[380px] rounded-lg bg-white p-6 shadow-lg" />
-          <div className="h-[380px] rounded-lg bg-white p-6 shadow-lg" />
+          <div className="h-[390px] rounded-[24px] border border-white/15 bg-white/10 p-6 shadow-lg" />
+          <div className="h-[390px] rounded-[24px] border border-white/15 bg-white/10 p-6 shadow-lg" />
+          <div className="h-[390px] rounded-[24px] border border-white/15 bg-white/10 p-6 shadow-lg" />
         </>
       )}
     </div>
   </Container>
 </section>
 
-        <section className="bg-[#f5f5f5] py-10">
-          <Container>
-            <div className="flex flex-col justify-between lg:flex-row">
-              <div className="w-full lg:w-[48%]">
-                <h2 className="text-[32px] font-semibold text-[#2c3e50]">
-                  What's New
-                </h2>
-                <div className="mt-6 space-y-4">
-                  <div className="flex items-start">
-                    <span className="mt-2 h-3 w-3 shrink-0 bg-[#9ac06f]" />
-                    <div className="ml-3 text-[16px] text-[#2c3e50]">
-                      <span className="font-semibold">02/07/2026: </span>
-                      Special Issue: The NASA Land-Cover/Land-Use Change Program:
-                      Past Achievements and Current Advances
-                    </div>
-                  </div>
-
-                  <div className="flex items-start">
-                    <span className="mt-2 h-3 w-3 shrink-0 bg-[#9ac06f]" />
-                    <div className="ml-3 text-[16px] text-[#2c3e50]">
-                      <span className="font-semibold">08/04/2025: </span>
-                      New Book Released: Remote Sensing of Land Cover and Land
-                      Use Changes in South and Southeast Asia
-                    </div>
-                  </div>
-
-                  <div className="flex items-start">
-                    <span className="mt-2 h-3 w-3 shrink-0 bg-[#9ac06f]" />
-                    <div className="ml-3 text-[16px] text-[#2c3e50]">
-                      <span className="font-semibold">05/09/2025: </span>
-                      Dr. Compton J. Tucker Elected to National Academy of
-                      Sciences
-                    </div>
-                  </div>
-
-                  <div className="flex items-start">
-                    <span className="mt-2 h-3 w-3 shrink-0 bg-[#9ac06f]" />
-                    <div className="ml-3 text-[16px] text-[#2c3e50]">
-                      <span className="font-semibold">04/22/2025: </span>
-                      Earth Day Spotlight: NASA’s Mission to Understand Our
-                      Planet
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-6 text-[#1d7bba] hover:underline">
-                  <a href="#">View All</a>
-                </div>
-              </div>
-
-              <div className="mt-8 w-full lg:mt-0 lg:w-[48%]">
-                <h2 className="text-[32px] font-semibold text-[#2c3e50]">
-                  Social
-                </h2>
-                <div className="mt-6 space-y-4">
-                  <div className="flex items-start">
-                    <span className="mt-2 h-3 w-3 shrink-0 bg-[#9ac06f]" />
-                    <div className="ml-3 text-[16px] text-[#2c3e50]">
-                      <span className="font-semibold">02/05/2026: </span>
-                      Meha Jain wins inaugural Arizona State University-Science
-                      Prize
-                    </div>
-                  </div>
-
-                  <div className="flex items-start">
-                    <span className="mt-2 h-3 w-3 shrink-0 bg-[#9ac06f]" />
-                    <div className="ml-3 text-[16px] text-[#2c3e50]">
-                      <span className="font-semibold">01/22/2026: </span>
-                      David Roy named Science Team Lead for the 2026–2030
-                      Landsat Science Team
-                    </div>
-                  </div>
-
-                  <div className="flex items-start">
-                    <span className="mt-2 h-3 w-3 shrink-0 bg-[#9ac06f]" />
-                    <div className="ml-3 text-[16px] text-[#2c3e50]">
-                      <span className="font-semibold">12/15/2025: </span>
-                      Randolph H. Wynne received the Garland Gray Forestry
-                      Research Award
-                    </div>
-                  </div>
-
-                  <div className="flex items-start">
-                    <span className="mt-2 h-3 w-3 shrink-0 bg-[#9ac06f]" />
-                    <div className="ml-3 text-[16px] text-[#2c3e50]">
-                      <span className="font-semibold">11/28/2024: </span>
-                      Jaguar at Risk from Drug Trafficking in Central America
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-6 text-[#1d7bba] hover:underline">
-                  <a href="#">View All</a>
-                </div>
-              </div>
-            </div>
-          </Container>
-        </section>
-
-    <section className="bg-[#efefef] py-12">
+        <section className="bg-[#efefef] py-12">
   <div className="mx-auto max-w-[1500px] px-12">
     <h2 className="mb-10 text-center text-[34px] font-bold uppercase text-[#1f3b63]">
       FEATURED SPEAKERS
@@ -727,10 +695,10 @@ const handleNextPeople = () => {
           people.map((person) => (
             <div
               key={person.id}
-              className="basis-1/5 min-w-0 flex-shrink-0"
+              className="basis-1/5 min-w-[260px] flex-shrink-0"
             >
-              <div className="flex min-h-[260px] w-full flex-col items-center rounded-2xl bg-white p-6 text-center shadow-md transition hover:shadow-lg">
-                <div className="mx-auto h-[110px] w-[110px] overflow-hidden rounded-full">
+              <div className="flex h-[310px] w-full flex-col items-center rounded-2xl bg-white p-6 text-center shadow-md transition hover:shadow-lg">
+                <div className="mx-auto h-[110px] w-[110px] shrink-0 overflow-hidden rounded-full bg-gray-200">
                   {person.avatar ? (
                     <img
                       src={imgUrl(person.avatar) || ""}
@@ -738,28 +706,38 @@ const handleNextPeople = () => {
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gray-200 text-sm text-gray-500">
+                    <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">
                       No image
                     </div>
                   )}
                 </div>
 
-                <h3 className="mt-5 text-[18px] font-bold text-black">
+                <h3 className="mt-5 line-clamp-2 min-h-[52px] text-[18px] font-bold leading-[26px] text-black">
                   {person.fullName}
                 </h3>
 
-                {person.role && (
-                  <p className="mt-3 text-[16px] text-gray-700">
-                    {person.role}
-                  </p>
-                )}
+                <div className="mt-2 min-h-[52px]">
+                  {person.role ? (
+                    <p className="line-clamp-2 text-[16px] leading-[26px] text-gray-700">
+                      {person.role}
+                    </p>
+                  ) : (
+                    <p className="text-[16px] leading-[26px] text-gray-400">
+                      Updating...
+                    </p>
+                  )}
+                </div>
 
                 <Link
-                  href={`/people/${person.id}`}
-                  className="mt-4 inline-block text-[15px] font-medium text-[#1d7bba] hover:underline"
-                >
-                  Xem chi tiết
-                </Link>
+  href={
+    person.id
+      ? `/people?personId=${person.id}`
+      : `/people?name=${encodeURIComponent(person.fullName)}`
+  }
+  className="mt-auto inline-flex items-center gap-1 border-b-2 border-[#65b741] pb-1 text-[15px] font-bold !text-[#0066cc] transition hover:gap-2 hover:border-[#4f9d2f] hover:!text-[#004f9e]"
+>
+  Xem chi tiết <span className="text-[16px]">››</span>
+</Link>
               </div>
             </div>
           ))
@@ -781,59 +759,111 @@ const handleNextPeople = () => {
     </div>
   </div>
 </section>
-        <section className="mb-10 bg-[#FFFFFF] py-10">
+
+        <section className="mb-10 bg-[#eaf4ff] py-10">
   <Container>
     <div className="mb-10 text-center">
-      <h2 className="text-[32px] font-semibold text-yellow-400">
-        STRATEGIC PARTNERS
+      <h2 className="text-[32px] font-semibold text-[#0b5cad]">
+        {home?.projectsSectionTitle || "STRATEGIC PARTNERS"}
       </h2>
     </div>
 
-    <div className="relative flex justify-center space-x-30"> <div className="absolute inset-x-0 top-[-20px] bg-cover bg-center" style={{ backgroundImage: "url('/images/s1.jfif')", backgroundPosition: "center", backgroundSize: "cover", height: "230px", width: "100%", }} />
+    <div className="relative flex justify-center gap-12 bg-[#eaf4ff] px-8 py-12 lg:gap-20 xl:gap-30">
+      <div
+        className="absolute inset-x-0 top-[-20px] rounded-[28px] bg-cover bg-center opacity-80"
+        style={{
+          backgroundImage: "url('/images/s1.jfif')",
+          backgroundPosition: "center",
+          backgroundSize: "cover",
+          height: "230px",
+          width: "100%",
+        }}
+      />
 
-      <div className="z-10 flex h-[200px] w-[160px] flex-col items-center rounded-[999px] bg-white px-6 py-5 shadow-lg transition-transform hover:scale-105">
-        <div className="flex h-[110px] w-[110px] items-center justify-center">
-          <img
-            src="/images/S2.png"
-            alt="HCMUNRE"
-            className="max-h-full max-w-full object-contain"
-          />
-        </div>
-        <p className="mt-4 text-[16px] font-semibold">HCMUNRE</p>
-      </div>
+      {(Array.isArray(home?.projectsItems) && home.projectsItems.length > 0
+        ? home.projectsItems
+        : [
+            {
+              name: "HCMUNRE",
+              title: "HCMUNRE",
+              logo: "/images/S2.png",
+              imageUrl: "/images/S2.png",
+              link: "#",
+              buttonLink: "#",
+            },
+            {
+              name: "ISP",
+              title: "ISP",
+              logo: "/images/S3.jpg",
+              imageUrl: "/images/S3.jpg",
+              link: "#",
+              buttonLink: "#",
+            },
+            {
+              name: "UTT",
+              title: "UTT",
+              logo: "/images/S4.png",
+              imageUrl: "/images/S4.png",
+              link: "#",
+              buttonLink: "#",
+            },
+            {
+              name: "VNSC",
+              title: "VNSC",
+              logo: "/images/S5.png",
+              imageUrl: "/images/S5.png",
+              link: "#",
+              buttonLink: "#",
+            },
+          ]
+      ).map((partner: any, index: number) => {
+        const partnerName =
+          partner.name || partner.title || `Partner ${index + 1}`;
+        const partnerLogo = partner.logo || partner.imageUrl || "";
+        const partnerLink = partner.link || partner.buttonLink || "#";
 
-      <div className="z-10 flex h-[200px] w-[160px] flex-col items-center rounded-[999px] bg-white px-6 py-5 shadow-lg transition-transform hover:scale-105">
-        <div className="flex h-[110px] w-[110px] items-center justify-center">
-          <img
-            src="/images/S3.jpg"
-            alt="ISP"
-            className="max-h-full max-w-full object-contain"
-          />
-        </div>
-        <p className="mt-4 text-[16px] font-semibold">ISP</p>
-      </div>
+        const card = (
+          <div className="z-10 flex h-[200px] w-[160px] flex-col items-center rounded-[999px] border-2 border-[#8cc6ff] bg-white px-6 py-5 shadow-[0_12px_30px_rgba(11,92,173,0.16)] transition-transform hover:scale-105 hover:border-[#0b5cad]">
+            <div className="flex h-[110px] w-[110px] items-center justify-center">
+              {partnerLogo ? (
+                <img
+                  src={partnerLogo}
+                  alt={partnerName}
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <span className="text-center text-xs text-slate-400">
+                  No logo
+                </span>
+              )}
+            </div>
 
-      <div className="z-10 flex h-[200px] w-[160px] flex-col items-center rounded-[999px] bg-white px-6 py-5 shadow-lg transition-transform hover:scale-105">
-        <div className="flex h-[110px] w-[110px] items-center justify-center">
-          <img
-            src="/images/S4.png"
-            alt="UTT"
-            className="max-h-full max-w-full object-contain"
-          />
-        </div>
-        <p className="mt-4 text-[16px] font-semibold">UTT</p>
-      </div>
+            <p className="mt-4 text-[16px] font-semibold text-[#0b3f75]">
+              {partnerName}
+            </p>
+          </div>
+        );
 
-      <div className="z-10 flex h-[200px] w-[160px] flex-col items-center rounded-[999px] bg-white px-6 py-5 shadow-lg transition-transform hover:scale-105">
-        <div className="flex h-[110px] w-[110px] items-center justify-center">
-          <img
-            src="/images/S5.png"
-            alt="VNSC"
-            className="max-h-full max-w-full object-contain"
-          />
-        </div>
-        <p className="mt-4 text-[16px] font-semibold">VNSC</p>
-      </div>
+        if (!partnerLink || partnerLink === "#") {
+          return (
+            <div key={index} className="z-10">
+              {card}
+            </div>
+          );
+        }
+
+        return (
+          <a
+            key={index}
+            href={partnerLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="z-10"
+          >
+            {card}
+          </a>
+        );
+      })}
     </div>
   </Container>
 </section>

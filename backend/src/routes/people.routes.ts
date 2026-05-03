@@ -5,10 +5,36 @@ import { adminMiddleware } from "../middlewares/admin.middleware";
 
 const router = Router();
 
-router.get("/", async (_req: Request, res: Response) => {
+const allowedCategories = ["speakers", "guests", "committee"];
+
+function normalizeCategory(value: any) {
+  const category = String(value || "").trim().toLowerCase();
+
+  if (allowedCategories.includes(category)) {
+    return category;
+  }
+
+  return "speakers";
+}
+
+/* =========================
+   GET PEOPLE - PUBLIC
+   GET /api/people
+   GET /api/people?category=speakers
+========================= */
+router.get("/", async (req: Request, res: Response) => {
   try {
+    const category = req.query.category
+      ? normalizeCategory(req.query.category)
+      : null;
+
+    const where = category ? { category } : {};
+
     const people = await prisma.person.findMany({
-      orderBy: { createdAt: "desc" },
+      where,
+      orderBy: {
+        createdAt: "desc",
+      },
     });
 
     return res.status(200).json({
@@ -17,41 +43,18 @@ router.get("/", async (_req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error("GET PEOPLE ERROR:", error);
+
     return res.status(500).json({
       success: false,
-      message: error?.message || "Failed to fetch people",
+      message: error?.message || "Lỗi lấy danh sách people",
     });
   }
 });
 
-router.get("/:id", async (req: Request, res: Response) => {
-  try {
-    const id = Number(req.params.id);
-
-    const person = await prisma.person.findUnique({
-      where: { id },
-    });
-
-    if (!person) {
-      return res.status(404).json({
-        success: false,
-        message: "Person not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: person,
-    });
-  } catch (error: any) {
-    console.error("GET PERSON DETAIL ERROR:", error);
-    return res.status(500).json({
-      success: false,
-      message: error?.message || "Failed to fetch person detail",
-    });
-  }
-});
-
+/* =========================
+   CREATE PERSON - ADMIN
+   POST /api/people
+========================= */
 router.post(
   "/",
   authMiddleware,
@@ -67,36 +70,50 @@ router.post(
         location,
         avatar,
         bio,
+        category,
       } = req.body;
+
+      if (!fullName || String(fullName).trim() === "") {
+        return res.status(400).json({
+          success: false,
+          message: "Họ tên là bắt buộc",
+        });
+      }
 
       const person = await prisma.person.create({
         data: {
-          fullName,
-          role,
-          institution,
-          email,
-          cvLink,
-          location,
-          avatar,
-          bio,
+          fullName: String(fullName).trim(),
+          role: role ? String(role).trim() : null,
+          institution: institution ? String(institution).trim() : null,
+          email: email ? String(email).trim() : null,
+          cvLink: cvLink ? String(cvLink).trim() : null,
+          location: location ? String(location).trim() : null,
+          avatar: avatar ? String(avatar).trim() : null,
+          bio: bio ? String(bio).trim() : null,
+          category: normalizeCategory(category),
         },
       });
 
       return res.status(201).json({
         success: true,
-        message: "Person created successfully",
+        message: "Thêm person thành công",
         data: person,
       });
     } catch (error: any) {
       console.error("CREATE PERSON ERROR:", error);
+
       return res.status(500).json({
         success: false,
-        message: error?.message || "Failed to create person",
+        message: error?.message || "Lỗi thêm person",
       });
     }
   }
 );
 
+/* =========================
+   UPDATE PERSON - ADMIN
+   PUT /api/people/:id
+========================= */
 router.put(
   "/:id",
   authMiddleware,
@@ -104,6 +121,26 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const id = Number(req.params.id);
+
+      if (!id || Number.isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "ID person không hợp lệ",
+        });
+      }
+
+      const existingPerson = await prisma.person.findUnique({
+        where: {
+          id,
+        },
+      });
+
+      if (!existingPerson) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy person",
+        });
+      }
 
       const {
         fullName,
@@ -114,37 +151,53 @@ router.put(
         location,
         avatar,
         bio,
+        category,
       } = req.body;
 
+      if (!fullName || String(fullName).trim() === "") {
+        return res.status(400).json({
+          success: false,
+          message: "Họ tên là bắt buộc",
+        });
+      }
+
       const person = await prisma.person.update({
-        where: { id },
+        where: {
+          id,
+        },
         data: {
-          fullName,
-          role,
-          institution,
-          email,
-          cvLink,
-          location,
-          avatar,
-          bio,
+          fullName: String(fullName).trim(),
+          role: role ? String(role).trim() : null,
+          institution: institution ? String(institution).trim() : null,
+          email: email ? String(email).trim() : null,
+          cvLink: cvLink ? String(cvLink).trim() : null,
+          location: location ? String(location).trim() : null,
+          avatar: avatar ? String(avatar).trim() : null,
+          bio: bio ? String(bio).trim() : null,
+          category: normalizeCategory(category),
         },
       });
 
       return res.status(200).json({
         success: true,
-        message: "Person updated successfully",
+        message: "Cập nhật person thành công",
         data: person,
       });
     } catch (error: any) {
       console.error("UPDATE PERSON ERROR:", error);
+
       return res.status(500).json({
         success: false,
-        message: error?.message || "Failed to update person",
+        message: error?.message || "Lỗi cập nhật person",
       });
     }
   }
 );
 
+/* =========================
+   DELETE PERSON - ADMIN
+   DELETE /api/people/:id
+========================= */
 router.delete(
   "/:id",
   authMiddleware,
@@ -153,19 +206,42 @@ router.delete(
     try {
       const id = Number(req.params.id);
 
+      if (!id || Number.isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "ID person không hợp lệ",
+        });
+      }
+
+      const existingPerson = await prisma.person.findUnique({
+        where: {
+          id,
+        },
+      });
+
+      if (!existingPerson) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy person",
+        });
+      }
+
       await prisma.person.delete({
-        where: { id },
+        where: {
+          id,
+        },
       });
 
       return res.status(200).json({
         success: true,
-        message: "Person deleted successfully",
+        message: "Xóa person thành công",
       });
     } catch (error: any) {
       console.error("DELETE PERSON ERROR:", error);
+
       return res.status(500).json({
         success: false,
-        message: error?.message || "Failed to delete person",
+        message: error?.message || "Lỗi xóa person",
       });
     }
   }

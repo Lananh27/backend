@@ -4,25 +4,34 @@ import { prisma } from "./lib/prisma";
 async function main() {
   const email = "admin@gmail.com";
   const plainPassword = "123456";
+
   const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
-  const existingUser = await prisma.user.findFirst({
-    where: { email },
+  const existingAdmin = await prisma.user.findUnique({
+    where: {
+      email,
+    },
   });
 
-  if (existingUser) {
-    await prisma.user.update({
-      where: { id: existingUser.id },
+  if (existingAdmin) {
+    const updatedAdmin = await prisma.user.update({
+      where: {
+        email,
+      },
       data: {
         password: hashedPassword,
         role: "ADMIN",
       },
     });
 
-    console.log("Updated existing admin:");
-    console.log({ email, password: plainPassword, role: "ADMIN" });
+    console.log("Admin account updated:");
+    console.log({
+      id: updatedAdmin.id,
+      email: updatedAdmin.email,
+      role: updatedAdmin.role,
+    });
   } else {
-    await prisma.user.create({
+    const createdAdmin = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
@@ -30,9 +39,17 @@ async function main() {
       },
     });
 
-    console.log("Created new admin:");
-    console.log({ email, password: plainPassword, role: "ADMIN" });
+    console.log("Admin account created:");
+    console.log({
+      id: createdAdmin.id,
+      email: createdAdmin.email,
+      role: createdAdmin.role,
+    });
   }
+
+  console.log("Login with:");
+  console.log("Email:", email);
+  console.log("Password:", plainPassword);
 }
 
 main()

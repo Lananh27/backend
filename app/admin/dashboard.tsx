@@ -39,12 +39,7 @@ const dashboardItems = [
     href: "/admin/data",
   },
   {
-    title: "Documents",
-    description: "Quản lý tài liệu",
-    href: "/admin/documents",
-  },
-  {
-    title: "Attention",
+    title: "News article",
     description: "Quản lý các mục Attention",
     href: "/admin/attention",
   },

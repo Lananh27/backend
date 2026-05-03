@@ -1,4 +1,4 @@
-import AttentionForm from "@/components/admin/AttentionForm";
+import AttentionForm from "../../../components/admin/AttentionForm";
 
 export default function AdminAttentionPage() {
   return (

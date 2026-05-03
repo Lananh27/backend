@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -10,10 +10,11 @@ import { getHomeContent } from "@/lib/api";
 type MapItem = {
   title: string;
   slug: string;
-  content: string;
+  topic?: string;
+  content?: string;
   link: string;
-  buttonText: string;
-  publishedAt: string;
+  buttonText?: string;
+  publishedAt?: string;
 };
 
 type HomeContent = {
@@ -28,32 +29,90 @@ type HomeContent = {
   mapsItems?: MapItem[];
 };
 
+function getMapSrc(link?: string) {
+  if (!link) return "";
+
+  const value = link.trim();
+
+  const iframeSrcMatch = value.match(/src=["']([^"']+)["']/i);
+  if (iframeSrcMatch?.[1]) {
+    return iframeSrcMatch[1];
+  }
+
+  if (value.includes("/maps/embed")) {
+    return value;
+  }
+
+  if (value.includes("google.com/maps")) {
+    try {
+      const decoded = decodeURIComponent(value);
+
+      const latLngMatch = decoded.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+
+      if (latLngMatch?.[1] && latLngMatch?.[2]) {
+        return `https://www.google.com/maps?q=${latLngMatch[1]},${latLngMatch[2]}&z=16&output=embed`;
+      }
+
+      const placeMatch = decoded.match(/\/maps\/place\/([^/@?]+)/);
+
+      if (placeMatch?.[1]) {
+        const placeName = placeMatch[1].replace(/\+/g, " ");
+        return `https://www.google.com/maps?q=${encodeURIComponent(
+          placeName
+        )}&output=embed`;
+      }
+
+      const url = new URL(value);
+      const q = url.searchParams.get("q");
+
+      if (q) {
+        return `https://www.google.com/maps?q=${encodeURIComponent(
+          q
+        )}&output=embed`;
+      }
+
+      return value.includes("?")
+        ? `${value}&output=embed`
+        : `${value}?output=embed`;
+    } catch {
+      return value;
+    }
+  }
+
+  return value;
+}
+
 export default function MapsPage() {
   const [home, setHome] = useState<HomeContent | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const res = await getHomeContent();
+
         if (res?.data) {
           setHome(res.data);
         }
       } catch (error) {
         console.error("Failed to fetch maps content:", error);
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchData();
   }, []);
 
-  const sortedMaps =
-    Array.isArray(home?.mapsItems)
-      ? [...home.mapsItems].sort(
-          (a, b) =>
-            new Date(b.publishedAt || "1970-01-01").getTime() -
-            new Date(a.publishedAt || "1970-01-01").getTime()
-        )
-      : [];
+  const maps = useMemo(() => {
+    if (!Array.isArray(home?.mapsItems)) return [];
+
+    return [...home.mapsItems].sort(
+      (a, b) =>
+        new Date(b.publishedAt || "1970-01-01").getTime() -
+        new Date(a.publishedAt || "1970-01-01").getTime()
+    );
+  }, [home?.mapsItems]);
 
   return (
     <>
@@ -63,73 +122,77 @@ export default function MapsPage() {
         partnerLogos={home?.partnerLogos}
       />
 
-      <main className="min-h-screen bg-[#efefef] py-10">
+      <main className="min-h-screen bg-[#eef3f7] py-12">
         <Container>
-          <div className="rounded-xl bg-white p-8 shadow-md">
-            <h1 className="mb-8 text-[40px] font-bold text-[#2c3e50]">
-              {home?.mapsSectionTitle || "Maps"}
-            </h1>
+          <section className="rounded-2xl bg-white p-8 shadow-md">
+            <div className="mb-8">
+              <h1 className="text-[42px] font-bold text-[#2c3e50]">
+                {home?.mapsSectionTitle || "Maps"}
+              </h1>
 
-            <div className="space-y-10">
-              {sortedMaps.length > 0 ? (
-                sortedMaps.map((item, index) => (
-                  <div key={index} className="rounded-lg border p-6">
-                    <p className="mb-2 text-[14px] text-gray-500">
-                      {item.publishedAt
-                        ? new Date(item.publishedAt).toLocaleDateString("vi-VN")
-                        : ""}
-                    </p>
+              <p className="mt-3 max-w-2xl text-[17px] leading-7 text-gray-600">
+                Explore interactive maps, research locations, conference areas,
+                and project sites.
+              </p>
+            </div>
 
-                    <h2 className="text-[28px] font-bold text-[#004b7f]">
-                      {item.title}
-                    </h2>
+            {loading ? (
+              <div className="rounded-xl bg-gray-50 p-10 text-center text-gray-500">
+                Đang tải Maps...
+              </div>
+            ) : maps.length > 0 ? (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {maps.map((item, index) => {
+                  const mapSrc = getMapSrc(item.link);
 
-                    <div className="mt-5 overflow-hidden rounded-lg border bg-white shadow-sm">
-                      {item.link ? (
-                        <div className="h-[420px] w-full overflow-hidden">
+                  return (
+                    <Link
+                      key={`${item.slug}-${index}`}
+                      href={`/maps/${item.slug}`}
+                      className="group overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                    >
+                      <div className="h-[260px] w-full overflow-hidden bg-gray-100">
+                        {mapSrc ? (
                           <iframe
-                            src={item.link}
+                            src={mapSrc}
                             title={item.title}
                             className="h-full w-full border-0"
                             loading="lazy"
+                            allowFullScreen
                             referrerPolicy="no-referrer-when-downgrade"
                           />
-                        </div>
-                      ) : (
-                        <div className="flex h-[420px] items-center justify-center bg-[#cce7ff] text-[18px] text-gray-600">
-                          Chưa có link map
-                        </div>
-                      )}
-                    </div>
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-gray-500">
+                            Chưa có hình map
+                          </div>
+                        )}
+                      </div>
 
-                    <div className="mt-5 flex gap-4">
-                      <Link
-                        href={`/maps/${item.slug}`}
-                        className="inline-block rounded-lg bg-[#cce7ff] px-5 py-3 font-semibold text-[#004b7f] hover:bg-[#b6d9f0]"
-                      >
-                        {item.buttonText || "View Map"}
-                      </Link>
+                      <div className="p-5">
+                        <p className="mb-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#7ab648]">
+                          {item.topic || "Map"}
+                        </p>
 
-                      {item.link && (
-                        <a
-                          href={item.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-block rounded-lg border border-[#004b7f] px-5 py-3 font-semibold text-[#004b7f] hover:bg-[#f4faff]"
-                        >
-                          Open External Map
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-[18px] text-gray-500">
+                        <h2 className="text-[22px] font-bold leading-snug text-[#2c3e50] group-hover:text-[#0f6fb8]">
+                          {item.title}
+                        </h2>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-xl bg-gray-50 p-10 text-center">
+                <h2 className="text-[24px] font-bold text-[#2c3e50]">
                   Chưa có nội dung Maps.
-                </div>
-              )}
-            </div>
-          </div>
+                </h2>
+
+                <p className="mt-2 text-gray-500">
+                  Vào admin để thêm map đầu tiên.
+                </p>
+              </div>
+            )}
+          </section>
         </Container>
       </main>
 
