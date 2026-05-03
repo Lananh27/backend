@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Container from "@/components/layout/Container";
 import Link from "next/link";
 import Header from "@/components/layout/Header";
@@ -93,6 +93,57 @@ type PersonItem = {
   bio?: string;
 };
 
+function parseJsonArray<T>(value: any): T[] {
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function normalizeHomeResponse(data: any): HomeContent | null {
+  const raw =
+    data?.data?.content ||
+    data?.data?.home ||
+    data?.data?.homeContent ||
+    data?.data ||
+    data?.home ||
+    data?.content ||
+    data?.homeContent ||
+    data?.result ||
+    data;
+
+  if (!raw || typeof raw !== "object") return null;
+
+  return {
+    ...raw,
+    heroSlides: parseJsonArray<HeroSlide>(raw.heroSlides),
+    infoItems: parseJsonArray<InfoItem>(raw.infoItems),
+    attentionItems: parseJsonArray<AttentionItem>(raw.attentionItems),
+    projectsItems: parseJsonArray<any>(raw.projectsItems),
+    mapsItems: parseJsonArray<MapItem>(raw.mapsItems),
+    partnerLogos: parseJsonArray<string>(raw.partnerLogos),
+  };
+}
+
+function normalizeArrayResponse<T>(data: any): T[] {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.data?.items)) return data.data.items;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.result)) return data.result;
+  if (Array.isArray(data?.projects)) return data.projects;
+  if (Array.isArray(data?.people)) return data.people;
+  return [];
+}
+
 export default function Home() {
   const [home, setHome] = useState<HomeContent | null>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -178,33 +229,18 @@ export default function Home() {
           getProjects(),
         ]);
 
-        if (homeRes?.data) {
-          setHome(homeRes.data);
-        } else if (homeRes) {
-          setHome(homeRes);
-        } else {
-          setHome(null);
-        }
+        const homeData = normalizeHomeResponse(homeRes);
+        const peopleData = normalizeArrayResponse<PersonItem>(peopleRes);
+        const projectsData = normalizeArrayResponse<ProjectItem>(projectsRes);
 
-        if (Array.isArray(peopleRes?.data)) {
-          setPeople(peopleRes.data);
-        } else if (Array.isArray(peopleRes)) {
-          setPeople(peopleRes);
-        } else {
-          setPeople([]);
-        }
+        setHome(homeData);
+        setPeople(peopleData);
+        setProjects(projectsData);
 
-        if (Array.isArray(projectsRes?.data)) {
-          setProjects(projectsRes.data);
-        } else if (Array.isArray(projectsRes)) {
-          setProjects(projectsRes);
-        } else {
-          setProjects([]);
-        }
-
-        console.log("HOME DATA:", homeRes);
-        console.log("PEOPLE DATA:", peopleRes);
-        console.log("PROJECTS DATA:", projectsRes);
+        console.log("HOME PAGE RAW:", homeRes);
+        console.log("HOME PAGE NORMALIZED:", homeData);
+        console.log("PEOPLE PAGE NORMALIZED:", peopleData);
+        console.log("PROJECTS PAGE NORMALIZED:", projectsData);
       } catch (error) {
         console.error("FETCH HOME PAGE ERROR:", error);
         setHome(null);
