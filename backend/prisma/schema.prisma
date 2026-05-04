@@ -50,7 +50,7 @@ model Project {
   subtitle     String?
   description  String?
   content      String?
-  bullets      String[]
+  bullets      Json?
   image        String?
   readMoreLink String?
   publishedAt  DateTime?
