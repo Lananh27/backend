@@ -17,6 +17,17 @@ async function readJsonSafely(res: Response) {
   return res.json().catch(() => null);
 }
 
+function getApiErrorMessage(result: any, fallback: string) {
+  const message = result?.message || fallback;
+  const detail = result?.error || result?.details;
+
+  if (detail) {
+    return `${message}: ${detail}`;
+  }
+
+  return message;
+}
+
 export async function authFetch(
   url: string,
   options: RequestInit = {}
@@ -48,7 +59,7 @@ export async function getHomeContent() {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to fetch home content");
+    throw new Error(getApiErrorMessage(result, "Failed to fetch home content"));
   }
 
   return result;
@@ -63,7 +74,7 @@ export async function updateHomeContent(data: any) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || `Request failed: ${res.status}`);
+    throw new Error(getApiErrorMessage(result, `Request failed: ${res.status}`));
   }
 
   return result;
@@ -183,7 +194,7 @@ export async function getAboutContent() {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to fetch about content");
+    throw new Error(getApiErrorMessage(result, "Failed to fetch about content"));
   }
 
   return result;
@@ -198,7 +209,7 @@ export async function updateAboutContent(data: Partial<AboutPageData>) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || `Request failed: ${res.status}`);
+    throw new Error(getApiErrorMessage(result, `Request failed: ${res.status}`));
   }
 
   return result;
@@ -212,7 +223,7 @@ export async function getAllAboutPages() {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to fetch about pages");
+    throw new Error(getApiErrorMessage(result, "Failed to fetch about pages"));
   }
 
   return result;
@@ -228,7 +239,9 @@ export async function getAboutContentBySlug(slug: string) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || `Failed to fetch about page: ${slug}`);
+    throw new Error(
+      getApiErrorMessage(result, `Failed to fetch about page: ${slug}`)
+    );
   }
 
   return result;
@@ -248,7 +261,7 @@ export async function updateAboutContentBySlug(
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || `Request failed: ${res.status}`);
+    throw new Error(getApiErrorMessage(result, `Request failed: ${res.status}`));
   }
 
   return result;
@@ -274,7 +287,7 @@ export async function uploadImage(file: File): Promise<{
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Upload file thất bại");
+    throw new Error(getApiErrorMessage(result, "Upload file thất bại"));
   }
 
   if (!result?.url) {
@@ -328,7 +341,7 @@ export async function getPeople(params?: { category?: PeopleCategory }) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Không lấy được danh sách people");
+    throw new Error(getApiErrorMessage(result, "Không lấy được danh sách people"));
   }
 
   return result;
@@ -349,7 +362,7 @@ export async function createPerson(data: PersonItem) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Thêm people thất bại");
+    throw new Error(getApiErrorMessage(result, "Thêm people thất bại"));
   }
 
   return result;
@@ -370,7 +383,7 @@ export async function updatePerson(id: number, data: PersonItem) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Cập nhật people thất bại");
+    throw new Error(getApiErrorMessage(result, "Cập nhật people thất bại"));
   }
 
   return result;
@@ -390,7 +403,7 @@ export async function deletePerson(id: number) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Xóa people thất bại");
+    throw new Error(getApiErrorMessage(result, "Xóa people thất bại"));
   }
 
   return result;
@@ -408,7 +421,7 @@ export async function getEducationContent() {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to fetch education content");
+    throw new Error(getApiErrorMessage(result, "Failed to fetch education content"));
   }
 
   return result;
@@ -423,7 +436,7 @@ export async function updateEducationContent(data: any) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || `Request failed: ${res.status}`);
+    throw new Error(getApiErrorMessage(result, `Request failed: ${res.status}`));
   }
 
   return result;
@@ -465,7 +478,7 @@ export async function getDataItems(category?: string): Promise<DataItem[]> {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to fetch data items");
+    throw new Error(getApiErrorMessage(result, "Failed to fetch data items"));
   }
 
   return result?.data || result || [];
@@ -485,7 +498,7 @@ export async function getAdminDataItems(): Promise<DataItem[]> {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to fetch admin data items");
+    throw new Error(getApiErrorMessage(result, "Failed to fetch admin data items"));
   }
 
   return result?.data || result || [];
@@ -506,7 +519,7 @@ export async function createDataItem(payload: Partial<DataItem>) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to create data item");
+    throw new Error(getApiErrorMessage(result, "Failed to create data item"));
   }
 
   return result;
@@ -527,7 +540,7 @@ export async function updateDataItem(id: number, payload: Partial<DataItem>) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to update data item");
+    throw new Error(getApiErrorMessage(result, "Failed to update data item"));
   }
 
   return result;
@@ -547,7 +560,7 @@ export async function deleteDataItem(id: number) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to delete data item");
+    throw new Error(getApiErrorMessage(result, "Failed to delete data item"));
   }
 
   return result;
@@ -561,7 +574,7 @@ export async function getAllDataPages() {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to fetch data pages");
+    throw new Error(getApiErrorMessage(result, "Failed to fetch data pages"));
   }
 
   return result;
@@ -577,7 +590,7 @@ export async function getDataContentBySlug(slug: string) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || `Failed to fetch data page: ${slug}`);
+    throw new Error(getApiErrorMessage(result, `Failed to fetch data page: ${slug}`));
   }
 
   return result;
@@ -594,7 +607,7 @@ export async function updateDataContentBySlug(slug: string, data: any) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || `Request failed: ${res.status}`);
+    throw new Error(getApiErrorMessage(result, `Request failed: ${res.status}`));
   }
 
   return result;
@@ -645,7 +658,7 @@ export async function getLibraryDocuments(params?: {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Cannot fetch library documents");
+    throw new Error(getApiErrorMessage(result, "Cannot fetch library documents"));
   }
 
   return result;
@@ -661,7 +674,7 @@ export async function getLibraryDocumentBySlug(slug: string) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Cannot fetch library document");
+    throw new Error(getApiErrorMessage(result, "Cannot fetch library document"));
   }
 
   return result;
@@ -682,7 +695,7 @@ export async function createLibraryDocument(data: LibraryDocument) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Cannot create library document");
+    throw new Error(getApiErrorMessage(result, "Cannot create library document"));
   }
 
   return result;
@@ -703,7 +716,7 @@ export async function updateLibraryDocument(id: number, data: LibraryDocument) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Cannot update library document");
+    throw new Error(getApiErrorMessage(result, "Cannot update library document"));
   }
 
   return result;
@@ -723,7 +736,7 @@ export async function deleteLibraryDocument(id: number) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Cannot delete library document");
+    throw new Error(getApiErrorMessage(result, "Cannot delete library document"));
   }
 
   return result;
@@ -760,7 +773,7 @@ export async function getMeetings() {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to fetch meetings");
+    throw new Error(getApiErrorMessage(result, "Failed to fetch meetings"));
   }
 
   return result;
@@ -781,7 +794,7 @@ export async function createMeeting(data: Partial<MeetingItem>) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to create meeting");
+    throw new Error(getApiErrorMessage(result, "Failed to create meeting"));
   }
 
   return result;
@@ -802,7 +815,7 @@ export async function updateMeeting(id: number, data: Partial<MeetingItem>) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to update meeting");
+    throw new Error(getApiErrorMessage(result, "Failed to update meeting"));
   }
 
   return result;
@@ -822,7 +835,7 @@ export async function deleteMeeting(id: number) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to delete meeting");
+    throw new Error(getApiErrorMessage(result, "Failed to delete meeting"));
   }
 
   return result;
@@ -871,7 +884,9 @@ export async function getProjects() {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || `Failed to fetch projects: ${res.status}`);
+    throw new Error(
+      getApiErrorMessage(result, `Failed to fetch projects: ${res.status}`)
+    );
   }
 
   return result;
@@ -887,7 +902,7 @@ export async function getProjectBySlug(slug: string) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to fetch project");
+    throw new Error(getApiErrorMessage(result, "Failed to fetch project"));
   }
 
   return result;
@@ -908,7 +923,7 @@ export async function createProject(payload: ProjectItem) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to create project");
+    throw new Error(getApiErrorMessage(result, "Failed to create project"));
   }
 
   return result;
@@ -929,7 +944,7 @@ export async function updateProject(id: number, payload: ProjectItem) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to update project");
+    throw new Error(getApiErrorMessage(result, "Failed to update project"));
   }
 
   return result;
@@ -949,7 +964,7 @@ export async function deleteProject(id: number) {
   const result = await readJsonSafely(res);
 
   if (!res.ok) {
-    throw new Error(result?.message || "Failed to delete project");
+    throw new Error(getApiErrorMessage(result, "Failed to delete project"));
   }
 
   return result;

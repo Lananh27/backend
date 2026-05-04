@@ -6,7 +6,7 @@ import { adminMiddleware } from "../middlewares/admin.middleware";
 const router = Router();
 
 function slugify(text: string) {
-  return text
+  return String(text || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -15,26 +15,62 @@ function slugify(text: string) {
     .replace(/(^-|-$)+/g, "");
 }
 
+function normalizeBullets(value: any): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item: any) => String(item || "").trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item: any) => String(item || "").trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return value
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function normalizeDate(value: any) {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+function getErrorMessage(error: any) {
+  return error?.message || String(error);
+}
+
 function normalizeProjectBody(body: any) {
   const title = String(body.title || "").trim();
   const slug = String(body.slug || "").trim() || slugify(title);
+  const readMoreLink = String(body.readMoreLink || "").trim();
 
   return {
     title,
     slug,
     subtitle: String(body.subtitle || "").trim(),
     description: String(body.description || "").trim(),
-
-    // Nội dung bài viết chi tiết hiển thị trong /projects/[slug]
     content: String(body.content || "").trim(),
-
-    bullets: Array.isArray(body.bullets)
-      ? body.bullets.map((item: any) => String(item || "").trim()).filter(Boolean)
-      : [],
-
+    bullets: normalizeBullets(body.bullets),
     image: String(body.image || "").trim(),
-    readMoreLink: String(body.readMoreLink || "").trim() || `/projects/${slug}`,
-    publishedAt: body.publishedAt ? new Date(body.publishedAt) : null,
+    readMoreLink,
+    publishedAt: normalizeDate(body.publishedAt),
     category: String(body.category || "Research").trim(),
     researchArea: String(body.researchArea || "General").trim(),
     status: String(body.status || "In Progress").trim(),
@@ -43,21 +79,33 @@ function normalizeProjectBody(body: any) {
   };
 }
 
+function finalReadMoreLink(readMoreLink: string, slug: string) {
+  if (!readMoreLink || readMoreLink === "#") {
+    return `/projects/${slug}`;
+  }
+
+  return readMoreLink;
+}
+
 // GET /api/projects
 router.get("/", async (_req, res) => {
   try {
     const projects = await prisma.project.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [{ createdAt: "desc" }, { updatedAt: "desc" }],
     });
 
-    return res.json({
+    return res.status(200).json({
+      success: true,
       data: projects,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("GET PROJECTS ERROR:", error);
-    return res.status(500).json({ message: "Lỗi lấy danh sách projects" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi lấy danh sách projects",
+      error: getErrorMessage(error),
+    });
   }
 });
 
@@ -66,20 +114,36 @@ router.get("/:slug", async (req, res) => {
   try {
     const slug = String(req.params.slug || "").trim();
 
+    if (!slug) {
+      return res.status(400).json({
+        success: false,
+        message: "Slug không hợp lệ",
+      });
+    }
+
     const project = await prisma.project.findUnique({
       where: { slug },
     });
 
     if (!project) {
-      return res.status(404).json({ message: "Không tìm thấy project" });
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy project",
+      });
     }
 
-    return res.json({
+    return res.status(200).json({
+      success: true,
       data: project,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("GET PROJECT DETAIL ERROR:", error);
-    return res.status(500).json({ message: "Lỗi lấy chi tiết project" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi lấy chi tiết project",
+      error: getErrorMessage(error),
+    });
   }
 });
 
@@ -89,7 +153,10 @@ router.post("/", authMiddleware, adminMiddleware, async (req, res) => {
     const data = normalizeProjectBody(req.body);
 
     if (!data.title) {
-      return res.status(400).json({ message: "Vui lòng nhập tên project" });
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng nhập tên project",
+      });
     }
 
     const exists = await prisma.project.findUnique({
@@ -102,20 +169,23 @@ router.post("/", authMiddleware, adminMiddleware, async (req, res) => {
       data: {
         ...data,
         slug: finalSlug,
-        readMoreLink:
-          data.readMoreLink && data.readMoreLink !== `/projects/${data.slug}`
-            ? data.readMoreLink
-            : `/projects/${finalSlug}`,
+        readMoreLink: finalReadMoreLink(data.readMoreLink, finalSlug),
       },
     });
 
     return res.status(201).json({
+      success: true,
       message: "Tạo project thành công",
       data: project,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("CREATE PROJECT ERROR:", error);
-    return res.status(500).json({ message: "Lỗi tạo project" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi tạo project",
+      error: getErrorMessage(error),
+    });
   }
 });
 
@@ -125,13 +195,19 @@ router.put("/:id", authMiddleware, adminMiddleware, async (req, res) => {
     const id = Number(req.params.id);
 
     if (Number.isNaN(id)) {
-      return res.status(400).json({ message: "ID không hợp lệ" });
+      return res.status(400).json({
+        success: false,
+        message: "ID không hợp lệ",
+      });
     }
 
     const data = normalizeProjectBody(req.body);
 
     if (!data.title) {
-      return res.status(400).json({ message: "Vui lòng nhập tên project" });
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng nhập tên project",
+      });
     }
 
     const oldProject = await prisma.project.findUnique({
@@ -139,7 +215,10 @@ router.put("/:id", authMiddleware, adminMiddleware, async (req, res) => {
     });
 
     if (!oldProject) {
-      return res.status(404).json({ message: "Không tìm thấy project" });
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy project",
+      });
     }
 
     const slugExists = await prisma.project.findFirst({
@@ -158,20 +237,23 @@ router.put("/:id", authMiddleware, adminMiddleware, async (req, res) => {
       data: {
         ...data,
         slug: finalSlug,
-        readMoreLink:
-          data.readMoreLink && data.readMoreLink !== `/projects/${data.slug}`
-            ? data.readMoreLink
-            : `/projects/${finalSlug}`,
+        readMoreLink: finalReadMoreLink(data.readMoreLink, finalSlug),
       },
     });
 
-    return res.json({
+    return res.status(200).json({
+      success: true,
       message: "Cập nhật project thành công",
       data: project,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("UPDATE PROJECT ERROR:", error);
-    return res.status(500).json({ message: "Lỗi cập nhật project" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi cập nhật project",
+      error: getErrorMessage(error),
+    });
   }
 });
 
@@ -181,7 +263,10 @@ router.delete("/:id", authMiddleware, adminMiddleware, async (req, res) => {
     const id = Number(req.params.id);
 
     if (Number.isNaN(id)) {
-      return res.status(400).json({ message: "ID không hợp lệ" });
+      return res.status(400).json({
+        success: false,
+        message: "ID không hợp lệ",
+      });
     }
 
     const oldProject = await prisma.project.findUnique({
@@ -189,19 +274,28 @@ router.delete("/:id", authMiddleware, adminMiddleware, async (req, res) => {
     });
 
     if (!oldProject) {
-      return res.status(404).json({ message: "Không tìm thấy project" });
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy project",
+      });
     }
 
     await prisma.project.delete({
       where: { id },
     });
 
-    return res.json({
+    return res.status(200).json({
+      success: true,
       message: "Xóa project thành công",
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("DELETE PROJECT ERROR:", error);
-    return res.status(500).json({ message: "Lỗi xóa project" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi xóa project",
+      error: getErrorMessage(error),
+    });
   }
 });
 

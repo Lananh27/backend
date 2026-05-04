@@ -131,13 +131,41 @@ function normalizeHomeResponse(data: any): HomeContent | null {
 
 function normalizeArrayResponse<T>(data: any): T[] {
   if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.data?.items)) return data.data.items;
-  if (Array.isArray(data?.items)) return data.items;
-  if (Array.isArray(data?.result)) return data.result;
-  if (Array.isArray(data?.projects)) return data.projects;
-  if (Array.isArray(data?.people)) return data.people;
+
+  const candidates = [
+    data?.data,
+    data?.data?.items,
+    data?.data?.projects,
+    data?.data?.people,
+    data?.data?.result,
+    data?.data?.data,
+    data?.items,
+    data?.result,
+    data?.projects,
+    data?.people,
+    data?.projectsItems,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
   return [];
+}
+
+function getErrorText(error: any) {
+  if (!error) return "";
+
+  if (typeof error === "string") return error;
+
+  return (
+    error?.message ||
+    error?.error ||
+    error?.response?.data?.message ||
+    String(error)
+  );
 }
 
 export default function Home() {
@@ -146,6 +174,7 @@ export default function Home() {
   const [currentInfoPage, setCurrentInfoPage] = useState(0);
   const [people, setPeople] = useState<PersonItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [projectError, setProjectError] = useState("");
 
   const peopleSliderRef = useRef<HTMLDivElement>(null);
 
@@ -248,11 +277,20 @@ export default function Home() {
         const projectsData = normalizeArrayResponse<ProjectItem>(
           projectsResult.value
         );
-        setProjects(projectsData);
 
+        setProjects(projectsData);
+        setProjectError("");
+
+        console.log("PROJECTS PAGE RAW:", projectsResult.value);
         console.log("PROJECTS PAGE NORMALIZED:", projectsData);
       } else {
+        const errorText = getErrorText(projectsResult.reason);
+
         console.error("PROJECTS API ERROR:", projectsResult.reason);
+
+        setProjectError(
+          errorText || "Không lấy được dữ liệu Projects từ backend."
+        );
         setProjects([]);
       }
     };
@@ -652,8 +690,26 @@ export default function Home() {
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-[16px] border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-8 text-center text-[17px] font-semibold text-gray-500">
-                      There are no projects yet.
+                    <div
+                      className={`rounded-[16px] border border-dashed p-8 text-center text-[17px] font-semibold ${
+                        projectError
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : "border-[#cbd5e1] bg-[#f8fafc] text-gray-500"
+                      }`}
+                    >
+                      {projectError ? (
+                        <>
+                          <p className="font-black">Projects API đang lỗi.</p>
+                          <p className="mt-2 break-words text-[14px] font-semibold">
+                            {projectError}
+                          </p>
+                          <p className="mt-2 text-[14px]">
+                            Mở trực tiếp: {API_URL}/api/projects để xem lỗi backend.
+                          </p>
+                        </>
+                      ) : (
+                        "There are no projects yet."
+                      )}
                     </div>
                   )}
                 </div>

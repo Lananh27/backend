@@ -94,7 +94,7 @@ function statusClass(status?: string) {
 }
 
 function slugify(text: string) {
-  return text
+  return String(text || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -104,8 +104,10 @@ function slugify(text: string) {
 }
 
 function getProjectHref(project: ProjectItem) {
-  if (project.readMoreLink && project.readMoreLink.trim()) {
-    return project.readMoreLink;
+  const readMoreLink = project.readMoreLink?.trim();
+
+  if (readMoreLink && readMoreLink !== "#") {
+    return readMoreLink;
   }
 
   const slug = project.slug?.trim() || slugify(project.title || "");
@@ -116,12 +118,12 @@ function getProjectHref(project: ProjectItem) {
 }
 
 function normalizeBullets(value: any): string[] {
-  if (Array.isArray(value)) return value;
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
 
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
     } catch {
       return value
         .split("\n")
@@ -133,54 +135,83 @@ function normalizeBullets(value: any): string[] {
   return [];
 }
 
+function extractProjectList(data: any): any[] {
+  if (Array.isArray(data)) return data;
+
+  const candidates = [
+    data?.data,
+    data?.data?.items,
+    data?.data?.projects,
+    data?.data?.result,
+    data?.data?.data,
+    data?.projects,
+    data?.projectsItems,
+    data?.items,
+    data?.result,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+}
+
 function normalizeProjects(data: any): ProjectItem[] {
-  const list = Array.isArray(data)
-    ? data
-    : Array.isArray(data?.data)
-    ? data.data
-    : Array.isArray(data?.data?.items)
-    ? data.data.items
-    : Array.isArray(data?.projects)
-    ? data.projects
-    : Array.isArray(data?.projectsItems)
-    ? data.projectsItems
-    : Array.isArray(data?.items)
-    ? data.items
-    : Array.isArray(data?.result)
-    ? data.result
-    : [];
+  const list = extractProjectList(data);
 
-  return list.map((item: any) => {
-    const title = item.title || "";
-    const slug = item.slug || slugify(title);
+  console.log("PROJECTS NORMALIZE INPUT:", data);
+  console.log("PROJECTS NORMALIZE LIST:", list);
 
-    const publishedAt = item.publishedAt || item.createdAt || "";
+  return list
+    .filter((item: any) => item && typeof item === "object")
+    .map((item: any) => {
+      const title = String(item.title || "").trim();
+      const slug = String(item.slug || slugify(title)).trim();
 
-    return {
-      id: item.id,
-      slug,
-      title,
-      subtitle: item.subtitle || "",
-      description: item.description || item.summary || item.subtitle || "",
-      bullets: normalizeBullets(item.bullets),
-      image: item.image || item.heroImage || item.imageUrl || "",
-      readMoreLink: item.readMoreLink || "",
-      publishedAt,
-      category: item.category || "Research",
-      researchArea: item.researchArea || item.category || "General",
-      status: item.status || "In Progress",
-      yearRange:
-        item.yearRange ||
-        (publishedAt ? String(publishedAt).slice(0, 4) : "2024 - 2026"),
-      membersCount: String(item.membersCount || "5"),
-    };
-  });
+      const publishedAt = item.publishedAt || item.createdAt || "";
+
+      return {
+        id: item.id,
+        slug,
+        title,
+        subtitle: item.subtitle || "",
+        description: item.description || item.summary || item.subtitle || "",
+        bullets: normalizeBullets(item.bullets),
+        image: item.image || item.heroImage || item.imageUrl || "",
+        readMoreLink: item.readMoreLink || "",
+        publishedAt,
+        category: item.category || "Research",
+        researchArea: item.researchArea || item.category || "General",
+        status: item.status || "In Progress",
+        yearRange:
+          item.yearRange ||
+          (publishedAt ? String(publishedAt).slice(0, 4) : "2024 - 2026"),
+        membersCount: String(item.membersCount || "5"),
+      };
+    });
+}
+
+function getErrorText(error: any) {
+  if (!error) return "";
+
+  if (typeof error === "string") return error;
+
+  return (
+    error?.message ||
+    error?.error ||
+    error?.response?.data?.message ||
+    String(error)
+  );
 }
 
 export default function ProjectsPage() {
   const [home, setHome] = useState<HomeContent | null>(null);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [projectError, setProjectError] = useState("");
 
   const [searchText, setSearchText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All Categories");
@@ -199,6 +230,7 @@ export default function ProjectsPage() {
 
   async function fetchProjects() {
     setLoading(true);
+    setProjectError("");
 
     try {
       const [homeResult, projectsResult] = await Promise.allSettled([
@@ -224,11 +256,24 @@ export default function ProjectsPage() {
         console.log("PROJECTS RAW:", projectsResult.value);
         console.log("PROJECTS NORMALIZED:", projectList);
       } else {
+        const errorText = getErrorText(projectsResult.reason);
+
         console.error("PROJECTS API ERROR:", projectsResult.reason);
+
+        setProjectError(
+          errorText ||
+            "Không lấy được dữ liệu Projects. Kiểm tra API /api/projects."
+        );
         setProjects([]);
       }
     } catch (error) {
+      const errorText = getErrorText(error);
+
       console.error("FETCH PROJECTS ERROR:", error);
+
+      setProjectError(
+        errorText || "Không lấy được dữ liệu Projects. Kiểm tra backend."
+      );
       setHome(null);
       setProjects([]);
     } finally {
@@ -478,6 +523,16 @@ export default function ProjectsPage() {
                 </div>
               </div>
 
+              {projectError && (
+                <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-5 text-sm font-semibold leading-6 text-red-700">
+                  <p className="font-black">Projects API đang lỗi:</p>
+                  <p className="mt-1 break-words">{projectError}</p>
+                  <p className="mt-2 text-red-600">
+                    Mở trực tiếp {API_URL}/api/projects để xem lỗi chi tiết.
+                  </p>
+                </div>
+              )}
+
               {loading ? (
                 <div className="rounded-xl border border-[#d6e0ef] bg-white p-12 text-center shadow-sm">
                   <p className="font-black text-[#0f2342]">
@@ -490,7 +545,9 @@ export default function ProjectsPage() {
                     No projects found
                   </h3>
                   <p className="mt-2 text-sm font-medium text-[#52657f]">
-                    Try another keyword or reset filters.
+                    {projectError
+                      ? "Backend đang lỗi nên chưa thể hiển thị project."
+                      : "Try another keyword or reset filters."}
                   </p>
                 </div>
               ) : (
