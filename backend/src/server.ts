@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { env } from "./config/env";
+import { prisma } from "./lib/prisma";
 
 import authRoutes from "./routes/auth.routes";
 import meetingRoutes from "./routes/meeting.routes";
@@ -81,8 +82,81 @@ app.get("/api", (_req, res) => {
       "/api/library",
       "/api/registrations",
       "/api/projects",
+      "/api/debug/project-columns",
+      "/api/debug/database-url",
     ],
   });
+});
+
+/**
+ * DEBUG TEMP:
+ * Dùng để kiểm tra database Render hiện tại có cột content trong bảng Project chưa.
+ * Sau khi fix xong có thể xóa 2 route debug này.
+ */
+app.get("/api/debug/project-columns", async (_req, res) => {
+  try {
+    const columns = await prisma.$queryRaw<
+      Array<{
+        column_name: string;
+        data_type: string;
+        is_nullable: string;
+        column_default: string | null;
+      }>
+    >`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'Project'
+      ORDER BY ordinal_position
+    `;
+
+    return res.status(200).json({
+      success: true,
+      table: "Project",
+      hasContentColumn: columns.some((col) => col.column_name === "content"),
+      columns,
+    });
+  } catch (error: any) {
+    console.error("DEBUG PROJECT COLUMNS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error?.message || String(error),
+    });
+  }
+});
+
+/**
+ * DEBUG TEMP:
+ * Không trả full DATABASE_URL để tránh lộ password.
+ * Chỉ trả host/database name để so với link bạn đã chạy SQL.
+ */
+app.get("/api/debug/database-url", (_req, res) => {
+  try {
+    const rawUrl = process.env.DATABASE_URL || "";
+
+    if (!rawUrl) {
+      return res.status(500).json({
+        success: false,
+        message: "DATABASE_URL is missing",
+      });
+    }
+
+    const parsed = new URL(rawUrl);
+
+    return res.status(200).json({
+      success: true,
+      protocol: parsed.protocol,
+      host: parsed.hostname,
+      port: parsed.port,
+      database: parsed.pathname.replace("/", ""),
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error?.message || String(error),
+    });
+  }
 });
 
 const PORT = Number(process.env.PORT) || 5000;
