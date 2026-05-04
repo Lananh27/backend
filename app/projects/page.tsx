@@ -41,10 +41,40 @@ type HomeContent = {
 
 const statusOptions: ProjectStatus[] = ["In Progress", "Completed", "Planned"];
 
+function parseJsonArray<T>(value: any): T[] {
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
 function normalizeHome(data: any): HomeContent | null {
-  if (data?.data) return data.data;
-  if (data) return data;
-  return null;
+  const raw =
+    data?.data?.content ||
+    data?.data?.home ||
+    data?.data?.homeContent ||
+    data?.data ||
+    data?.home ||
+    data?.content ||
+    data?.homeContent ||
+    data?.result ||
+    data;
+
+  if (!raw || typeof raw !== "object") return null;
+
+  return {
+    ...raw,
+    partnerLogos: parseJsonArray<string>(raw.partnerLogos),
+    projectsItems: parseJsonArray<ProjectItem>(raw.projectsItems),
+  };
 }
 
 function imageUrl(url?: string | null) {
@@ -85,11 +115,31 @@ function getProjectHref(project: ProjectItem) {
   return `/projects/${slug}`;
 }
 
+function normalizeBullets(value: any): string[] {
+  if (Array.isArray(value)) return value;
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return value
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
 function normalizeProjects(data: any): ProjectItem[] {
   const list = Array.isArray(data)
     ? data
     : Array.isArray(data?.data)
     ? data.data
+    : Array.isArray(data?.data?.items)
+    ? data.data.items
     : Array.isArray(data?.projects)
     ? data.projects
     : Array.isArray(data?.projectsItems)
@@ -104,26 +154,24 @@ function normalizeProjects(data: any): ProjectItem[] {
     const title = item.title || "";
     const slug = item.slug || slugify(title);
 
+    const publishedAt = item.publishedAt || item.createdAt || "";
+
     return {
       id: item.id,
       slug,
       title,
       subtitle: item.subtitle || "",
-      description: item.description || item.summary || "",
-      bullets: Array.isArray(item.bullets) ? item.bullets : [],
+      description: item.description || item.summary || item.subtitle || "",
+      bullets: normalizeBullets(item.bullets),
       image: item.image || item.heroImage || item.imageUrl || "",
-      readMoreLink: item.readMoreLink || `/projects/${slug}`,
-      publishedAt: item.publishedAt || item.createdAt || "",
-      category: item.category || item.subtitle || "Research",
+      readMoreLink: item.readMoreLink || "",
+      publishedAt,
+      category: item.category || "Research",
       researchArea: item.researchArea || item.category || "General",
       status: item.status || "In Progress",
       yearRange:
         item.yearRange ||
-        (item.publishedAt
-          ? String(item.publishedAt).slice(0, 4)
-          : item.createdAt
-          ? String(item.createdAt).slice(0, 4)
-          : "2024 - 2026"),
+        (publishedAt ? String(publishedAt).slice(0, 4) : "2024 - 2026"),
       membersCount: String(item.membersCount || "5"),
     };
   });
@@ -150,22 +198,35 @@ export default function ProjectsPage() {
   }, []);
 
   async function fetchProjects() {
-    try {
-      setLoading(true);
+    setLoading(true);
 
-      const [homeRes, projectsRes] = await Promise.all([
+    try {
+      const [homeResult, projectsResult] = await Promise.allSettled([
         getHomeContent(),
         getProjects(),
       ]);
 
-      const homeData = normalizeHome(homeRes);
-      const projectList = normalizeProjects(projectsRes);
+      if (homeResult.status === "fulfilled") {
+        const homeData = normalizeHome(homeResult.value);
+        setHome(homeData);
 
-      setHome(homeData);
-      setProjects(projectList);
+        console.log("PROJECTS HOME RAW:", homeResult.value);
+        console.log("PROJECTS HOME NORMALIZED:", homeData);
+      } else {
+        console.error("PROJECTS HOME API ERROR:", homeResult.reason);
+        setHome(null);
+      }
 
-      console.log("PROJECTS HOME DATA:", homeRes);
-      console.log("PROJECTS DATA:", projectsRes);
+      if (projectsResult.status === "fulfilled") {
+        const projectList = normalizeProjects(projectsResult.value);
+        setProjects(projectList);
+
+        console.log("PROJECTS RAW:", projectsResult.value);
+        console.log("PROJECTS NORMALIZED:", projectList);
+      } else {
+        console.error("PROJECTS API ERROR:", projectsResult.reason);
+        setProjects([]);
+      }
     } catch (error) {
       console.error("FETCH PROJECTS ERROR:", error);
       setHome(null);
