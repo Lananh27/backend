@@ -45,11 +45,13 @@ export async function getHomeContent() {
     cache: "no-store",
   });
 
+  const result = await readJsonSafely(res);
+
   if (!res.ok) {
-    throw new Error("Failed to fetch home content");
+    throw new Error(result?.message || "Failed to fetch home content");
   }
 
-  return res.json();
+  return result;
 }
 
 export async function updateHomeContent(data: any) {
@@ -448,11 +450,15 @@ export type DataItem = {
 };
 
 export async function getDataItems(category?: string): Promise<DataItem[]> {
-  const url = category
-    ? `${API_URL}/api/data?category=${category}`
-    : `${API_URL}/api/data`;
+  const query = new URLSearchParams();
 
-  const res = await fetch(url, {
+  if (category) {
+    query.set("category", category);
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+
+  const res = await fetch(`${API_URL}/api/data${suffix}`, {
     cache: "no-store",
   });
 
@@ -466,7 +472,13 @@ export async function getDataItems(category?: string): Promise<DataItem[]> {
 }
 
 export async function getAdminDataItems(): Promise<DataItem[]> {
-  const res = await fetch(`${API_URL}/api/data/admin`, {
+  const token = getToken();
+
+  if (!token) {
+    throw new Error("Bạn chưa đăng nhập hoặc token đã mất. Vui lòng đăng nhập lại.");
+  }
+
+  const res = await authFetch(`${API_URL}/api/data/admin`, {
     cache: "no-store",
   });
 

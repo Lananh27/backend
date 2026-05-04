@@ -5,11 +5,7 @@ import Container from "@/components/layout/Container";
 import Link from "next/link";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { getHomeContent, getPeople, getProjects } from "@/lib/api";
-
-const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL || "https://backend-roym.onrender.com"
-).replace(/\/$/, "");
+import { getHomeContent, getPeople, getProjects, API_URL } from "@/lib/api";
 
 type InfoItem = {
   date: string;
@@ -222,29 +218,41 @@ export default function Home() {
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const [homeRes, peopleRes, projectsRes] = await Promise.all([
-          getHomeContent(),
-          getPeople(),
-          getProjects(),
-        ]);
+      const [homeResult, peopleResult, projectsResult] =
+        await Promise.allSettled([getHomeContent(), getPeople(), getProjects()]);
 
-        const homeData = normalizeHomeResponse(homeRes);
-        const peopleData = normalizeArrayResponse<PersonItem>(peopleRes);
-        const projectsData = normalizeArrayResponse<ProjectItem>(projectsRes);
-
+      if (homeResult.status === "fulfilled") {
+        const homeData = normalizeHomeResponse(homeResult.value);
         setHome(homeData);
+
+        console.log("HOME PAGE RAW:", homeResult.value);
+        console.log("HOME PAGE NORMALIZED:", homeData);
+      } else {
+        console.error("HOME API ERROR:", homeResult.reason);
+        setHome(null);
+      }
+
+      if (peopleResult.status === "fulfilled") {
+        const peopleData = normalizeArrayResponse<PersonItem>(
+          peopleResult.value
+        );
         setPeople(peopleData);
+
+        console.log("PEOPLE PAGE NORMALIZED:", peopleData);
+      } else {
+        console.error("PEOPLE API ERROR:", peopleResult.reason);
+        setPeople([]);
+      }
+
+      if (projectsResult.status === "fulfilled") {
+        const projectsData = normalizeArrayResponse<ProjectItem>(
+          projectsResult.value
+        );
         setProjects(projectsData);
 
-        console.log("HOME PAGE RAW:", homeRes);
-        console.log("HOME PAGE NORMALIZED:", homeData);
-        console.log("PEOPLE PAGE NORMALIZED:", peopleData);
         console.log("PROJECTS PAGE NORMALIZED:", projectsData);
-      } catch (error) {
-        console.error("FETCH HOME PAGE ERROR:", error);
-        setHome(null);
-        setPeople([]);
+      } else {
+        console.error("PROJECTS API ERROR:", projectsResult.reason);
         setProjects([]);
       }
     };
